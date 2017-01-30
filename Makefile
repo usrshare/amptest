@@ -6,9 +6,9 @@ PREFIX=i686-w64-mingw32-
 CC=$(PREFIX)gcc
 LD=$(PREFIX)ld
 CFLAGS=-std=c11 -I/usr/share/mingw-w64/include -mwindows
-LIBS=-lcomctl32
+LIBS=-lcomctl32 -lgdi32
 
-_OBJS = main.o
+_OBJS = main.o wa_plugins.o win_misc.o
 
 ifdef RELEASE
 DEFS += -xSSE3 -O3 -DNDEBUG
