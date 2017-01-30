@@ -2,3 +2,4 @@ demo.mp3
 *.exe
 Plugins/
 skin/
+obj/
