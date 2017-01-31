@@ -11,6 +11,7 @@ struct waOutputPlugin* op = NULL;
 struct skinData {
 	HBITMAP mainbitmap;
 	HBITMAP titlebitmap;
+	HBITMAP cbuttons;
 };
 
 struct skinData skin;
@@ -56,6 +57,8 @@ short mouseReleaseY = -1;
 short mouseX = -1;
 short mouseY = -1;
 short mouseButtons = 0;
+
+unsigned char can_drag = 0;
 
 int hover(short x, short y, short w, short h) {
 
@@ -141,38 +144,81 @@ struct element mw_elements[WE_COUNT] = {
 };
 
 struct element mw_buttons[WB_COUNT] = {
-	{  .x = 3,   .y = 3, .w = 9,  .h = 9}, //menu
+	{  .x = 6,   .y = 3, .w = 9,  .h = 9}, //menu
 	{  .x = 244, .y = 3, .w = 9,  .h = 9}, //minimize
 	{  .x = 254, .y = 3, .w = 9,  .h = 9}, //windowshade
 	{  .x = 264, .y = 3, .w = 9,  .h = 9}, //close
+	{  .x = 11, .y = 22, .w = 10, .h = 43}, //OAIDV -- larger than the assoc. images
+	{  .x = 999, .y = 999, .w = 0, .h = 0}, //volume
+	{  .x = 999, .y = 999, .w = 0, .h = 0}, //balance
+	{  .x = 999, .y = 999, .w = 0, .h = 0}, //equalizer btn
+	{  .x = 999, .y = 999, .w = 0, .h = 0}, //playlist btn
+	{  .x = 16, .y = 72, .w = 249, .h = 10}, //scroll bar
+	{  .x = 16, .y = 88, .w = 23, .h = 18}, //prev
+	{  .x = 39, .y = 88, .w = 23, .h = 18}, //play
+	{  .x = 62, .y = 88, .w = 23, .h = 18}, //pause
+	{  .x = 85, .y = 88, .w = 23, .h = 18}, //stop
+	{  .x = 108, .y = 88, .w = 22, .h = 18}, //next
+
 };
 
-
 int handleHoldEvents(HWND hWnd) {
+	
+	can_drag = 1;
 
 	for (int i=0; i < WB_COUNT; i++) {
 		struct element* e = &mw_buttons[i];
+		if (hover(e->x, e->y, e->w, e->h)) can_drag = 0;
 		e->bs = hold(e->x,e->y,e->w,e->h,1);
 		if (e->bs != e->obs) invalidateXYWH(h_mainwin,e->x,e->y,e->w,e->h);
 	}
 }
 
-int handleClickEvents(HWND hWnd) {
-
-	if (click(264,3,9,9,1)) {
-		ExitProcess(0);
-	}
-}
-
-int find_element_to_update(unsigned int element_c, struct element* element_v, unsigned int element_i) {
-
-	for (int i = element_i; i < element_c; i++) {
-		struct element* e = &element_v[i];
-		if (e->bs != e->obs) { e->obs = e->bs; return i; }
+int get_click_button() {
+	for (int i=0; i < WB_COUNT; i++) {
+		struct element* cb = &mw_buttons[i];
+		if (click(cb->x,cb->y,cb->w,cb->h,1)) return i;
 	}
 	return -1;
+}
+
+int handleClickEvents(HWND hWnd) {
+
+	switch (get_click_button()) {
+		case WB_CLOSE:
+			ExitProcess(0);
+			break;
+		case WB_PLAY:
+			if (op->IsPlaying()) ip->Stop();
+			ip->Play("demo.mp3");
+			break;
+		case WB_PAUSE:
+			if (ip->IsPaused())
+				ip->UnPause();
+			else
+				ip->Pause();
+			break;
+		case WB_STOP:
+			if (op->IsPlaying()) ip->Stop();
+			break;
+	}
+}
+
+int find_element_to_update(unsigned int element_c, struct element* element_v, struct element** cur) {
+
+	while ((*cur) < (element_v + element_c)) {
+		if ((*cur)->bs != (*cur)->obs) { (*cur)->obs = (*cur)->bs; return (*cur)->bs; }
+		(*cur)++;
+	}
+	*cur = NULL;
+	return 0;
 
 }
+
+#ifndef GET_X_PARAM
+int GET_X_PARAM(LPARAM lParam) { return (int)(lParam & 0xFFFF); }
+int GET_Y_PARAM(LPARAM lParam) { return (int)(lParam >> 16); }
+#endif
 
 LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
@@ -187,13 +233,25 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			return 0;
 			break;
 		case WM_COMMAND:
-			if (LOWORD(wParam) == 1) ip->Play("demo.mp3");
+			//if (LOWORD(wParam) == 1) ip->Play("demo.mp3");
 			return 0;
 			break;
 		case WM_DESTROY:
 			PostQuitMessage(0);
 			return 0;
 			break;
+		case WM_NCHITTEST: {
+			POINT mp;
+			mp.x = GET_X_PARAM(lParam);
+			mp.y = GET_Y_PARAM(lParam);
+			MapWindowPoints(NULL,hWnd,&mp,1);
+			mouseX = mp.x; mouseY = mp.y;
+			printf("%dx%d\n",mouseX,mouseY);
+			handleHoldEvents(hWnd);
+			LRESULT r = DefWindowProc(hWnd,uMsg,wParam,lParam);
+			if ((can_drag) && (r == HTCLIENT)) r = HTCAPTION;
+			return r;
+			break; }
 		case WM_LBUTTONDOWN:
 			//record press location for "pushed down" buttons.
 			mouseClickX = LOWORD(lParam);
@@ -219,8 +277,11 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			skinBlit(hWnd, skin.mainbitmap, 0, 0, 0, 0, 0, 0);
 
 			int i=0;
-			while (( i = find_element_to_update(WE_COUNT,mw_elements,i)) != -1) {
-				switch (i) {
+			struct element* cur = &mw_elements[0];
+			do {
+				i = find_element_to_update(WE_COUNT,mw_elements,&cur);
+
+				switch (cur - mw_elements) {
 					case WE_TITLEBAR:
 						if (GetForegroundWindow() == hWnd) {
 							skinBlit(hWnd, skin.titlebitmap, 27, 0, 0, 0, 275, 14);
@@ -229,33 +290,40 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 						}
 						break;
 				}
-			}
-			i=0;
-			while (( i = find_element_to_update(WB_COUNT,mw_buttons,i)) != -1) {
-				switch (i) {
+			} while (cur);
+			cur=&mw_buttons[0];
+			do {
+				i = find_element_to_update(WB_COUNT,mw_buttons,&cur);
+				switch(cur - mw_buttons) {
+					case WB_MENU:
+						skinBlit(hWnd, skin.titlebitmap,0,i ? 9 : 0,6,3,9,9);
+						break;
 					case WB_MINIMIZE:
-						if (mw_buttons[WB_MINIMIZE].bs) {
-							skinBlit(hWnd, skin.titlebitmap,9,9,244,3,9,9);
-						} else {
-							skinBlit(hWnd, skin.titlebitmap,9,0,244,3,9,9);
-						}
+						skinBlit(hWnd, skin.titlebitmap,9,i ? 9 : 0,244,3,9,9);
 						break;
 					case WB_WINDOWSHADE:
-						if (mw_buttons[WB_WINDOWSHADE].bs) {
-							skinBlit(hWnd, skin.titlebitmap,9,18,254,3,9,9);
-						} else {
-							skinBlit(hWnd, skin.titlebitmap,0,18,254,3,9,9);
-						}
+						skinBlit(hWnd, skin.titlebitmap,i ? 9 : 0,18,254,3,9,9);
 						break;
 					case WB_CLOSE:
-						if (mw_buttons[WB_CLOSE].bs) {
-							skinBlit(hWnd, skin.titlebitmap,18,9,264,3,9,9);
-						} else {
-							skinBlit(hWnd, skin.titlebitmap,18,0,264,3,9,9);
-						}
+						skinBlit(hWnd, skin.titlebitmap,18,i ? 9 : 0,264,3,9,9);
 						break;
+					case WB_PREV:
+						skinBlit(hWnd, skin.cbuttons, 0, i ? 18 : 0, 16,88,23,18);
+					       break;	
+					case WB_PLAY:
+						skinBlit(hWnd, skin.cbuttons, 23, i ? 18 : 0, 16+23,88,23,18);
+					       break;	
+					case WB_PAUSE:
+						skinBlit(hWnd, skin.cbuttons, 46, i ? 18 : 0, 16+46,88,23,18);
+					       break;	
+					case WB_STOP:
+						skinBlit(hWnd, skin.cbuttons, 69, i ? 18 : 0, 16+69,88,23,18);
+					       break;	
+					case WB_NEXT:
+						skinBlit(hWnd, skin.cbuttons, 92, i ? 18 : 0, 16+92,88,22,18);
+					       break;	
 				}
-			}
+			} while (cur);
 			skinEndPaint(hWnd);
 			break;
 		default:
@@ -263,7 +331,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	}
 }
 
-WNDCLASS mainwin = {0,(WNDPROC)WindowProc,0,0,NULL,NULL,NULL,COLOR_BTNFACE+1,NULL,"helloMain"};
+WNDCLASS mainwin = {0,(WNDPROC)WindowProc,0,0,NULL,NULL,NULL,(HBRUSH) COLOR_BTNFACE+1,NULL,"helloMain"};
 
 int ampInit() {
 
@@ -289,6 +357,12 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	RegisterClass(&mainwin);
 	InitCommonControls();
 
+	for (int i=0; i < WE_COUNT; i++ ) {
+		mw_elements[i].bs = 0; mw_elements[i].obs = -1;}
+	for (int i=0; i < WB_COUNT; i++ ) {
+		mw_buttons[i].bs = 0; mw_buttons[i].obs = -1;}
+
+
 	h_mainwin = CreateWindowEx(0, "helloMain", "hello world", WS_VISIBLE | WS_POPUP, 128, 128, 275, 116, NULL, NULL, mainwin.hInstance, NULL);
 
 	skin.mainbitmap = LoadImage(NULL, "skin/main.bmp", IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
@@ -296,9 +370,9 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	skin.titlebitmap = LoadImage(NULL, "skin/titlebar.bmp", IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
 	if (!skin.titlebitmap) msgerror("load titlebar bitmap");
-
-	CreateWindow("BUTTON","Play",WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON, 16,96,24,16, h_mainwin, (HMENU)1, mainwin.hInstance, NULL);
-
+	
+	skin.cbuttons = LoadImage(NULL, "skin/cbuttons.bmp", IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
+	if (!skin.cbuttons) msgerror("load cbuttons bitmap");
 
 	ampInit();
 
