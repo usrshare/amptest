@@ -8,7 +8,7 @@ LD=$(PREFIX)ld
 CFLAGS=-std=c11 -I/usr/share/mingw-w64/include
 LIBS=-lcomctl32 -lgdi32 -mwindows
 
-_OBJS = main.o wa_plugins.o win_misc.o
+_OBJS = main.o wa_plugins.o win_misc.o menus.rc.o
 
 ifdef RELEASE
 DEFS += -xSSE3 -O3 -DNDEBUG
@@ -23,6 +23,9 @@ hello.exe: $(OBJS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(OBJDIR)
 	$(CC) -c -o $@ $< $(CFLAGS) $(DEFS)
+
+$(OBJDIR)/%.rc.o: $(SRCDIR)/%.rc $(OBJDIR)
+	windres -i $< -o $@
 
 $(OBJDIR):
 	mkdir $(OBJDIR)

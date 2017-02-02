@@ -5,6 +5,11 @@
 #include "wa_plugins.h"
 #include "win_misc.h"
 
+const char* default_text_layout = 
+	"Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm Nn Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz \" @\n"
+	"0 1 2 3 4 5 6 7 8 9 … . : ( ) - ! _ + \\ / [ ] ^ & % . = $ #\n"
+	"Åå Öö Ää ? *";
+
 struct waInputPlugin* ip = NULL;
 struct waOutputPlugin* op = NULL;
 
@@ -13,6 +18,7 @@ struct skinData {
 	HBITMAP titlebitmap;
 	HBITMAP cbuttons;
 	HBITMAP posbar;
+	HBITMAP text;
 };
 
 struct skinData skin;
@@ -370,6 +376,16 @@ int ampInit() {
 	return 0;
 }
 
+HBITMAP loadSkinBitmap (const char* filename) {
+	HBITMAP r = LoadImage(NULL, filename, IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
+	if (r == NULL) {
+		char errortxt[256];
+		snprintf(errortxt,256,"Unable to load %s", filename);
+		msgerror(errortxt);
+	}
+	return r;
+}
+
 int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
 
 	mainwin.hInstance = GetModuleHandle(0);
@@ -378,29 +394,23 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	RegisterClass(&mainwin);
 	InitCommonControls();
 
+	// force the initial draw of all elements.
 	for (int i=0; i < WE_COUNT; i++ ) {
 		mw_elements[i].bs = 0; mw_elements[i].obs = -1;}
 	for (int i=0; i < WB_COUNT; i++ ) {
 		mw_buttons[i].bs = 0; mw_buttons[i].obs = -1;}
 
+	ampInit();
 
 	h_mainwin = CreateWindowEx(0, "helloMain", "hello world", WS_VISIBLE | WS_POPUP, 128, 128, 275, 116, NULL, NULL, mainwin.hInstance, NULL);
 
 	SetTimer(h_mainwin,0,50,NULL);
 
-	skin.mainbitmap = LoadImage(NULL, "skin/main.bmp", IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
-	if (!skin.mainbitmap) msgerror("load bitmap");
-
-	skin.titlebitmap = LoadImage(NULL, "skin/titlebar.bmp", IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
-	if (!skin.titlebitmap) msgerror("load titlebar bitmap");
-
-	skin.cbuttons = LoadImage(NULL, "skin/cbuttons.bmp", IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
-	if (!skin.cbuttons) msgerror("load cbuttons bitmap");
-	
-	skin.posbar = LoadImage(NULL, "skin/posbar.bmp", IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
-	if (!skin.cbuttons) msgerror("load posbar bitmap");
-
-	ampInit();
+	skin.mainbitmap = loadSkinBitmap("skin/main.bmp");
+	skin.titlebitmap = loadSkinBitmap("skin/titlebar.bmp");
+	skin.cbuttons = loadSkinBitmap("skin/cbuttons.bmp");
+	skin.posbar = loadSkinBitmap("skin/posbar.bmp");
+	skin.text = loadSkinBitmap("skin/text.bmp");
 
 	//this is where WindowProc will start being called.
 

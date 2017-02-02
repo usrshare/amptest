@@ -1,0 +1,4 @@
+#include <windows.h>
+#include "menus.h"
+
+IDI_APPICON ICON "program_icon.ico"

@@ -22,6 +22,11 @@ struct waInputPlugin* loadInputPlugin(const char* filename, struct waOutputPlugi
 	struct waInputPlugin* ip = in_get();
 	
 	ip->hDllInstance = in;
+
+	// these functions are not currently implemented by this program.
+	// to prevent plugins from crashing, the pointers all point to empty
+	// functions that either return nothing or zero.
+
 	ip->SAGetMode = emptyfunc;
 	ip->SAAdd = emptyfunc;
 	ip->SAAddPCMData = emptyfunc;
