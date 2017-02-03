@@ -2,13 +2,14 @@
 #include <commctrl.h>
 #include <stdio.h>
 
+#include "menus.h"
 #include "wa_plugins.h"
 #include "win_misc.h"
 
 const char* default_text_layout = 
-	"Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm Nn Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz \" @\n"
-	"0 1 2 3 4 5 6 7 8 9 … . : ( ) - ! _ + \\ / [ ] ^ & % . = $ #\n"
-	"Åå Öö Ää ? *";
+"Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm Nn Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz \" @\n"
+"0 1 2 3 4 5 6 7 8 9 … . : ( ) - ! _ + \\ / [ ] ^ & % . = $ #\n"
+"Åå Öö Ää ? *";
 
 struct waInputPlugin* ip = NULL;
 struct waOutputPlugin* op = NULL;
@@ -24,6 +25,7 @@ struct skinData {
 struct skinData skin;
 
 HWND h_mainwin;
+HMENU h_mainmenu;
 
 struct paintData {
 	PAINTSTRUCT ps;
@@ -192,22 +194,27 @@ int get_click_button() {
 int handleClickEvents(HWND hWnd) {
 
 	switch (get_click_button()) {
+		case WB_MENU: {
+				      POINT mp = {.x = 6, .y = 12};
+				      MapWindowPoints(hWnd,NULL,&mp,1);
+				      TrackPopupMenuEx(h_mainmenu,TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON,mp.x,mp.y,h_mainwin,NULL);
+				      break; }
 		case WB_CLOSE:
-			ExitProcess(0);
-			break;
+			      ExitProcess(0);
+			      break;
 		case WB_PLAY:
-			if (op->IsPlaying()) ip->Stop();
-			ip->Play("demo.mp3");
-			break;
+			      if (op->IsPlaying()) ip->Stop();
+			      ip->Play("demo.mp3");
+			      break;
 		case WB_PAUSE:
-			if (ip->IsPaused())
-				ip->UnPause();
-			else
-				ip->Pause();
-			break;
+			      if (ip->IsPaused())
+				      ip->UnPause();
+			      else
+				      ip->Pause();
+			      break;
 		case WB_STOP:
-			if (op->IsPlaying()) ip->Stop();
-			break;
+			      if (op->IsPlaying()) ip->Stop();
+			      break;
 	}
 }
 
@@ -251,7 +258,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			if (op->IsPlaying()) {
 				int len = ip->GetLength();
 				int cur = ip->GetOutputTime();
-				
+
 				int xpos = (cur * 219) / len;
 				if (xpos < 0) xpos = 0;
 				if (xpos >= 219) xpos = 219;
@@ -277,6 +284,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				   mouseClickY = HIWORD(lParam);
 				   mouseButtons |= 1;
 				   handleHoldEvents(hWnd);
+				   return DefWindowProc(hWnd,uMsg,wParam,lParam);
 				   break;
 		case WM_LBUTTONUP:
 				   mouseReleaseX = LOWORD(lParam);
@@ -285,11 +293,13 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				   handleClickEvents(hWnd);
 				   mouseButtons &= (~1);
 				   handleHoldEvents(hWnd);
+				   return DefWindowProc(hWnd,uMsg,wParam,lParam);
 				   break;
 		case WM_MOUSEMOVE:
 				   mouseX = LOWORD(lParam);
 				   mouseY = HIWORD(lParam);
 				   handleHoldEvents(hWnd);
+				   return DefWindowProc(hWnd,uMsg,wParam,lParam);
 				   break;
 		case WM_PAINT: 
 				   skinStartPaint(hWnd);
@@ -341,7 +351,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 						   case WB_NEXT:
 							   skinBlit(hWnd, skin.cbuttons, 92, i ? 18 : 0, 16+92,88,22,18);
 							   break;	
-					           case WB_SCROLLBAR:
+						   case WB_SCROLLBAR:
 							   if (mw_buttons[WB_SCROLLBAR].value >= 0) {
 								   skinBlit(hWnd, skin.posbar, 0, 0, 16, 72, 248, 10); 
 								   skinBlit(hWnd, skin.posbar, 248, 0, 16 + mw_buttons[WB_SCROLLBAR].value, 72, 29, 10); 
@@ -392,6 +402,8 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	RegisterClass(&mainwin);
 	InitCommonControls();
+
+	h_mainmenu = LoadMenu(mainwin.hInstance, MAKEINTRESOURCE(IDM_MAINMENU) );
 
 	// force the initial draw of all elements.
 	for (int i=0; i < WE_COUNT; i++ ) {

@@ -2,3 +2,16 @@
 #include "menus.h"
 
 IDI_APPICON ICON "program_icon.ico"
+
+IDM_MAINMENU MENU {
+	MENUITEM "&About...", IDM_I_ABOUT
+	MENUITEM SEPARATOR
+	POPUP "&Open..."
+	{
+		MENUITEM "Open &File...", IDM_I_OPENFILE
+		MENUITEM "Open &Location...", IDM_I_OPENLOC
+		MENUITEM "Open &URL...", IDM_I_OPENURL
+	}
+	MENUITEM SEPARATOR
+	MENUITEM "E&xit", IDM_I_EXIT
+}
