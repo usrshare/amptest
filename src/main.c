@@ -11,6 +11,8 @@ const char* default_text_layout =
 "0 1 2 3 4 5 6 7 8 9 … . : ( ) - ! _ + \\ / [ ] ^ & % . = $ #\n"
 "Åå Öö Ää ? *";
 
+char filePath[1024];
+
 struct waInputPlugin* ip = NULL;
 struct waOutputPlugin* op = NULL;
 
@@ -168,6 +170,7 @@ struct element mw_buttons[WB_COUNT] = {
 	{  .x = 62, .y = 88, .w = 23, .h = 18}, //pause
 	{  .x = 85, .y = 88, .w = 23, .h = 18}, //stop
 	{  .x = 108, .y = 88, .w = 22, .h = 18}, //next
+	{  .x = 136, .y = 89, .w = 22, .h = 16}, //open
 
 };
 
@@ -202,10 +205,6 @@ int handleClickEvents(HWND hWnd) {
 		case WB_CLOSE:
 			      ExitProcess(0);
 			      break;
-		case WB_PLAY:
-			      if (op->IsPlaying()) ip->Stop();
-			      ip->Play("demo.mp3");
-			      break;
 		case WB_PAUSE:
 			      if (ip->IsPaused())
 				      ip->UnPause();
@@ -214,6 +213,25 @@ int handleClickEvents(HWND hWnd) {
 			      break;
 		case WB_STOP:
 			      if (op->IsPlaying()) ip->Stop();
+			      break;
+		case WB_OPEN: {
+			      OPENFILENAME ofn = {
+				      .lStructSize = sizeof ofn,
+				      .hwndOwner = h_mainwin,
+				      .hInstance = NULL,
+				      .lpstrFilter = "MP3 Files\0*.mp3\0\0",
+				      .lpstrCustomFilter = NULL,
+				      .nMaxCustFilter = 0,
+				      .nFilterIndex = 1,
+				      .lpstrFile = filePath,
+				      .nMaxFile = 1024,
+			      };
+			      BOOL r = GetOpenFileName(&ofn);
+			      if (!r) break;
+			      }
+		case WB_PLAY:
+			      if (op->IsPlaying()) ip->Stop();
+			      ip->Play(filePath);
 			      break;
 	}
 }
@@ -350,7 +368,10 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 							   break;	
 						   case WB_NEXT:
 							   skinBlit(hWnd, skin.cbuttons, 92, i ? 18 : 0, 16+92,88,22,18);
-							   break;	
+							   break;
+						   case WB_OPEN:
+							   skinBlit(hWnd, skin.cbuttons, 114, i ? 16 : 0, 136,89,22,16);
+							   break; 
 						   case WB_SCROLLBAR:
 							   if (mw_buttons[WB_SCROLLBAR].value >= 0) {
 								   skinBlit(hWnd, skin.posbar, 0, 0, 16, 72, 248, 10); 
@@ -410,6 +431,8 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		mw_elements[i].bs = 0; mw_elements[i].obs = -1;}
 	for (int i=0; i < WB_COUNT; i++ ) {
 		mw_buttons[i].bs = 0; mw_buttons[i].obs = -1;}
+
+	strcpy(filePath,"demo.mp3");
 
 	ampInit();
 
