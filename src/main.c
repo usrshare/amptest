@@ -266,7 +266,6 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 					   mp.y = GET_Y_PARAM(lParam);
 					   MapWindowPoints(NULL,hWnd,&mp,1);
 					   mouseX = mp.x; mouseY = mp.y;
-					   printf("%dx%d\n",mouseX,mouseY);
 					   handleHoldEvents(hWnd);
 					   LRESULT r = DefWindowProc(hWnd,uMsg,wParam,lParam);
 					   if ((can_drag) && (r == HTCLIENT)) r = HTCAPTION;
