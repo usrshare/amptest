@@ -2,15 +2,18 @@
 #include <commctrl.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <locale.h>
 
 #include "menus.h"
 #include "wa_plugins.h"
 #include "win_misc.h"
 
-const char* default_text_layout = 
+char* default_text_layout = 
 "Aa\tBb\tCc\tDd\tEe\tFf\tGg\tHh\tIi\tJj\tKk\tLl\tMm\tNn\tOo\tPp\tQq\tRr\tSs\tTt\tUu\tVv\tWw\tXx\tYy\tZz\t\"\t@\n"
-"0\t1\t2\t3\t4\t5\t6\t7\t8\t9\t…\t.\t:\t(\t)\t-\t!\t_\t+\t\\\t/\t[\t]\t^\t&\t%\t.\t=\t$\t#\n"
+"0\t1\t2\t3\t4\t5\t6\t7\t8\t9\t…\t.\t:\t(\t)\t-\t'\t!\t_\t+\t\\\t/\t[\t]\t^\t&\t%\t.\t=\t$\t#\n"
 "Åå\tÖö\tÄä\t?\t*\t ";
+char* allocd_text_layout = NULL;
+char* text_layout = NULL;
 
 char filePath[1024];
 
@@ -73,10 +76,10 @@ int iterate_utf8_codepoint(const char* cur, unsigned int* u_val) {
 	if (c[0] == 0)   { *u_val = 0; return 0; }
 	if (c[0] < 0x80) { *u_val = c[0]; return 1; } //0x00 - 0x7F, 1 byte
 	if (c[0] < 0xC0) { *u_val = '?'; return 1; } //0x80 - 0xBF, continuation byte
-	if (c[0] < 0xE0) { *u_val = (c[0] & 0x1f) << 6 + c[1] & 0x3F; return 2; }
-	if (c[0] < 0xF0) { *u_val = (c[0] & 0x0f) << 12 + (c[1] & 0x3F) << 6 + (c[2] & 0x3F); return 3; }
+	if (c[0] < 0xE0) { *u_val = ((c[0] & 0x1f) << 6) + (c[1] & 0x3F); return 2; }
+	if (c[0] < 0xF0) { *u_val = ((c[0] & 0x0f) << 12) + ((c[1] & 0x3F) << 6) + (c[2] & 0x3F); return 3; }
 	/* if (c[0] < 0xF8) { */
-	*u_val = (c[0] & 0x07) << 18 + (c[1] & 0x3F) << 12 + (c[2] & 0x3F) << 6 + (c[3] & 0x3F); return 4;
+	*u_val = ((c[0] & 0x07) << 18) + ((c[1] & 0x3F) << 12) + ((c[2] & 0x3F) << 6) + (c[3] & 0x3F); return 4;
 	/* } */
 }
 
@@ -97,28 +100,38 @@ int find_utf8char_in_utf8layout(unsigned int c_cp, const char* layout, int* o_x,
 		cur_l += r;
 	} while (r > 0);
 
+
 	*o_x = 3; *o_y = 2; //location of the ? character
 	return -1;
 }
 
-int skinDrawText(HWND hWnd, const char* text, int x, int y, int w, int h) {
+int skinDrawText(HWND hWnd, const char* text, int x, int y, int w) {
 
 	const char* cur = text;
 	int c_x = 0, c_y = 0, r = 0;
 	unsigned int c_cp = 0;
 
 	int dx=0, dy=0;
+	skinStartPaint(hWnd);
+
+	for (int ix=0; ix < (w / 5); ix++) {
+		skinBlit(hWnd, skin.text, 150,0,x+(ix*5),y,5,6); //tile
+	}
+
 	do {
 		r = iterate_utf8_codepoint(cur,&c_cp);
-		if (r == 0) return 0;
+		//printf("Character '%.*s' (%db) has a code %d\n",r,cur,r,c_cp);
+		if (r == 0) continue;
 		if ((c_cp == '\n') || (c_cp == '\r')) {dx = 0; dy += 6; continue; }
 
-		find_utf8char_in_utf8layout(c_cp, default_text_layout, &c_x, &c_y); 
+		find_utf8char_in_utf8layout(c_cp, text_layout, &c_x, &c_y); 
 
 		skinBlit(hWnd, skin.text, c_x*5, c_y*6, x + dx, y + dy, (c_cp == '@' ? 7 : 5), 6);
+		dx += (c_cp == '@' ? 7 : 5);
 
 		cur += r;
 	} while (r > 0);
+	skinEndPaint(hWnd);
 }
 
 CONST RECT mainTitleRect = {.left = 0, .top = 0, .right = 275, .bottom = 14};
@@ -294,8 +307,11 @@ int handleClickEvents(HWND hWnd) {
 		case WB_PLAY:
 			      if (op->IsPlaying()) ip->Stop();
 			      ip->Play(filePath);
+			      /*
+			      char* basepath = strrchr(filePath,'\\');
+			      if (!basepath) basepath = filePath; else basepath++;*/
 			      invalidateXYWH(h_mainwin,110,27,155,6);
-			      skinDrawText(h_mainwin,filePath,110,27,155,6);
+			      skinDrawText(h_mainwin,"привет winamp äöå.mp3",110,27,155);
 			      break;
 	}
 }
@@ -476,6 +492,8 @@ HBITMAP loadSkinBitmap (const char* filename) {
 
 int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
 
+	SetConsoleOutputCP(65001); //this program still outputs everything as UTF-8, even when running in Windows.
+
 	mainwin.hInstance = GetModuleHandle(0);
 	mainwin.hCursor = LoadCursor(0,IDC_ARROW);
 
@@ -503,6 +521,20 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	skin.cbuttons = loadSkinBitmap("skin/cbuttons.bmp");
 	skin.posbar = loadSkinBitmap("skin/posbar.bmp");
 	skin.text = loadSkinBitmap("skin/text.bmp");
+
+	FILE* textlayout = NULL;
+	if (textlayout = fopen("skin/text.txt","rb")) {
+
+		fseek(textlayout,0,SEEK_END);
+		long fsz = ftell(textlayout);
+		fseek(textlayout,0,SEEK_SET);
+
+		allocd_text_layout = realloc(allocd_text_layout,fsz);
+		fread(allocd_text_layout,fsz,1,textlayout);
+		fclose(textlayout);
+		text_layout = allocd_text_layout;
+
+	} else text_layout = default_text_layout;
 
 	//this is where WindowProc will start being called.
 
