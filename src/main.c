@@ -1,15 +1,16 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #include "menus.h"
 #include "wa_plugins.h"
 #include "win_misc.h"
 
 const char* default_text_layout = 
-"Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm Nn Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz \" @\n"
-"0 1 2 3 4 5 6 7 8 9 … . : ( ) - ! _ + \\ / [ ] ^ & % . = $ #\n"
-"Åå Öö Ää ? *";
+"Aa\tBb\tCc\tDd\tEe\tFf\tGg\tHh\tIi\tJj\tKk\tLl\tMm\tNn\tOo\tPp\tQq\tRr\tSs\tTt\tUu\tVv\tWw\tXx\tYy\tZz\t\"\t@\n"
+"0\t1\t2\t3\t4\t5\t6\t7\t8\t9\t…\t.\t:\t(\t)\t-\t!\t_\t+\t\\\t/\t[\t]\t^\t&\t%\t.\t=\t$\t#\n"
+"Åå\tÖö\tÄä\t?\t*\t ";
 
 char filePath[1024];
 
@@ -28,6 +29,8 @@ struct skinData skin;
 
 HWND h_mainwin;
 HMENU h_mainmenu;
+
+bool doubleMode = false;
 
 struct paintData {
 	PAINTSTRUCT ps;
@@ -54,9 +57,68 @@ int skinBlit(HWND hWnd, HBITMAP hbm, int xs, int ys, int xd, int yd, int w, int 
 
 	GetObject(hbm, sizeof(spaint.bitmap), &(spaint.bitmap));
 	spaint.oldBitmap = SelectObject(spaint.hdcMem, hbm);
+	if (doubleMode) {
+	StretchBlt(spaint.hdc, xd*2, yd*2, (w ? w : spaint.bitmap.bmWidth)*2, (h ? h : spaint.bitmap.bmHeight)*2, spaint.hdcMem, xs, ys, w ? w : spaint.bitmap.bmWidth, h ? h : spaint.bitmap.bmHeight, SRCCOPY);
+	} else {
 	BitBlt(spaint.hdc, xd, yd, w ? w : spaint.bitmap.bmWidth, h ? h : spaint.bitmap.bmHeight, spaint.hdcMem, xs, ys, SRCCOPY);
+	}
 	SelectObject(spaint.hdcMem, spaint.oldBitmap);
 	return 0;
+}
+
+int iterate_utf8_codepoint(const char* cur, unsigned int* u_val) {
+
+	const unsigned char* c = (const unsigned char*) cur;
+
+	if (c[0] == 0)   { *u_val = 0; return 0; }
+	if (c[0] < 0x80) { *u_val = c[0]; return 1; } //0x00 - 0x7F, 1 byte
+	if (c[0] < 0xC0) { *u_val = '?'; return 1; } //0x80 - 0xBF, continuation byte
+	if (c[0] < 0xE0) { *u_val = (c[0] & 0x1f) << 6 + c[1] & 0x3F; return 2; }
+	if (c[0] < 0xF0) { *u_val = (c[0] & 0x0f) << 12 + (c[1] & 0x3F) << 6 + (c[2] & 0x3F); return 3; }
+	/* if (c[0] < 0xF8) { */
+	*u_val = (c[0] & 0x07) << 18 + (c[1] & 0x3F) << 12 + (c[2] & 0x3F) << 6 + (c[3] & 0x3F); return 4;
+	/* } */
+}
+
+int find_utf8char_in_utf8layout(unsigned int c_cp, const char* layout, int* o_x, int* o_y) {
+
+	int x=0, y=0;
+	unsigned int l_cp = 0;
+	const char* cur_l = layout;
+	int r = 1;
+	do {
+		r = iterate_utf8_codepoint(cur_l, &l_cp);
+
+		if (l_cp == '\t') x++;
+		if (l_cp == '\n') {x = 0; y++;}
+
+		if (l_cp == c_cp) {*o_x = x; *o_y = y; return 0;}
+
+		cur_l += r;
+	} while (r > 0);
+
+	*o_x = 3; *o_y = 2; //location of the ? character
+	return -1;
+}
+
+int skinDrawText(HWND hWnd, const char* text, int x, int y, int w, int h) {
+
+	const char* cur = text;
+	int c_x = 0, c_y = 0, r = 0;
+	unsigned int c_cp = 0;
+
+	int dx=0, dy=0;
+	do {
+		r = iterate_utf8_codepoint(cur,&c_cp);
+		if (r == 0) return 0;
+		if ((c_cp == '\n') || (c_cp == '\r')) {dx = 0; dy += 6; continue; }
+
+		find_utf8char_in_utf8layout(c_cp, default_text_layout, &c_x, &c_y); 
+
+		skinBlit(hWnd, skin.text, c_x*5, c_y*6, x + dx, y + dy, (c_cp == '@' ? 7 : 5), 6);
+
+		cur += r;
+	} while (r > 0);
 }
 
 CONST RECT mainTitleRect = {.left = 0, .top = 0, .right = 275, .bottom = 14};
@@ -232,6 +294,8 @@ int handleClickEvents(HWND hWnd) {
 		case WB_PLAY:
 			      if (op->IsPlaying()) ip->Stop();
 			      ip->Play(filePath);
+			      invalidateXYWH(h_mainwin,110,27,155,6);
+			      skinDrawText(h_mainwin,filePath,110,27,155,6);
 			      break;
 	}
 }
@@ -286,16 +350,13 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			invalidateXYWH(h_mainwin,16,72,248,10);
 			break;
 		case WM_NCHITTEST: {
-					   POINT mp;
-					   mp.x = GET_X_PARAM(lParam);
-					   mp.y = GET_Y_PARAM(lParam);
+					   POINT mp = {GET_X_PARAM(lParam),GET_Y_PARAM(lParam) };
 					   MapWindowPoints(NULL,hWnd,&mp,1);
 					   mouseX = mp.x; mouseY = mp.y;
 					   handleHoldEvents(hWnd);
 					   LRESULT r = DefWindowProc(hWnd,uMsg,wParam,lParam);
 					   if ((can_drag) && (r == HTCLIENT)) r = HTCAPTION;
-					   return r;
-					   break; }
+					   return r; } 
 		case WM_LBUTTONDOWN:
 				   //record press location for "pushed down" buttons.
 				   mouseClickX = LOWORD(lParam);
@@ -303,7 +364,6 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				   mouseButtons |= 1;
 				   handleHoldEvents(hWnd);
 				   return DefWindowProc(hWnd,uMsg,wParam,lParam);
-				   break;
 		case WM_LBUTTONUP:
 				   mouseReleaseX = LOWORD(lParam);
 				   mouseReleaseY = HIWORD(lParam);
@@ -312,13 +372,11 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				   mouseButtons &= (~1);
 				   handleHoldEvents(hWnd);
 				   return DefWindowProc(hWnd,uMsg,wParam,lParam);
-				   break;
 		case WM_MOUSEMOVE:
 				   mouseX = LOWORD(lParam);
 				   mouseY = HIWORD(lParam);
 				   handleHoldEvents(hWnd);
 				   return DefWindowProc(hWnd,uMsg,wParam,lParam);
-				   break;
 		case WM_PAINT: 
 				   skinStartPaint(hWnd);
 				   skinBlit(hWnd, skin.mainbitmap, 0, 0, 0, 0, 0, 0);
