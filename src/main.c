@@ -35,6 +35,9 @@ HMENU h_mainmenu;
 
 bool doubleMode = false;
 
+int timercnt = 0;
+int scrollcnt = 0;
+
 struct paintData {
 	PAINTSTRUCT ps;
 	HDC hdc;
@@ -61,9 +64,9 @@ int skinBlit(HWND hWnd, HBITMAP hbm, int xs, int ys, int xd, int yd, int w, int 
 	GetObject(hbm, sizeof(spaint.bitmap), &(spaint.bitmap));
 	spaint.oldBitmap = SelectObject(spaint.hdcMem, hbm);
 	if (doubleMode) {
-	StretchBlt(spaint.hdc, xd*2, yd*2, (w ? w : spaint.bitmap.bmWidth)*2, (h ? h : spaint.bitmap.bmHeight)*2, spaint.hdcMem, xs, ys, w ? w : spaint.bitmap.bmWidth, h ? h : spaint.bitmap.bmHeight, SRCCOPY);
+		StretchBlt(spaint.hdc, xd*2, yd*2, (w ? w : spaint.bitmap.bmWidth)*2, (h ? h : spaint.bitmap.bmHeight)*2, spaint.hdcMem, xs, ys, w ? w : spaint.bitmap.bmWidth, h ? h : spaint.bitmap.bmHeight, SRCCOPY);
 	} else {
-	BitBlt(spaint.hdc, xd, yd, w ? w : spaint.bitmap.bmWidth, h ? h : spaint.bitmap.bmHeight, spaint.hdcMem, xs, ys, SRCCOPY);
+		BitBlt(spaint.hdc, xd, yd, w ? w : spaint.bitmap.bmWidth, h ? h : spaint.bitmap.bmHeight, spaint.hdcMem, xs, ys, SRCCOPY);
 	}
 	SelectObject(spaint.hdcMem, spaint.oldBitmap);
 	return 0;
@@ -105,33 +108,98 @@ int find_utf8char_in_utf8layout(unsigned int c_cp, const char* layout, int* o_x,
 	return -1;
 }
 
-int skinDrawText(HWND hWnd, const char* text, int x, int y, int w) {
+int skinTextLengthC(const char* text) { //length in codepoints
+
+	const char* cur = text;
+	int r = 0;
+	unsigned int c_cp = 0;
+
+	int dx=0;
+
+	do {
+		r = iterate_utf8_codepoint(cur,&c_cp);
+		if (r == 0) return dx;
+		dx++;
+		cur += r;
+	} while (true);
+}
+
+int skinTextLength(const char* text) {
+	return skinTextLengthC(text) * 5;
+}
+/*
+   int skinDrawTextScroll(HWND hWnd, const char* text, int x, int y, int w, int scroll, bool noclear) {
+
+   const char* cur = text;
+   int c_x = 0, c_y = 0, r = 0;
+   unsigned int c_cp = 0;
+
+   int dx= -scroll;
+
+   if (!noclear) {
+   for (int ix=0; ix < (w / 5); ix++) 
+   skinBlit(hWnd, skin.text, 150,0,x+(ix*5),y,5,6); //tile with empty space
+   }
+
+   do {
+   r = iterate_utf8_codepoint(cur,&c_cp);
+//printf("Character '%.*s' (%db) has a code %d\n",r,cur,r,c_cp);
+if (r == 0) return 0;
+
+find_utf8char_in_utf8layout(c_cp, text_layout, &c_x, &c_y); 
+
+int cwidth = (c_cp == '@' ? 7 : 5);
+
+if (dx >= w) return 0; //if we're already full, end here.
+if ((dx + cwidth) > w) cwidth = w - dx; //cut text length to whatever fits
+
+if ((dx + cwidth) > 0) { //if this character is at least partially visible,
+
+int xsh = (dx < 0 ? -dx : 0);
+
+skinBlit(hWnd, skin.text, (c_x*5) + xsh, c_y*6, x + dx + xsh, y, cwidth - xsh, 6);
+// if dx < 0, then that means this character should be only blitted partially.
+}
+
+dx += (c_cp == '@' ? 7 : 5);
+cur += r;
+
+} while (r > 0);
+return 0;
+}*/
+
+int skinDrawText(HWND hWnd, const char* text, int x, int y, int w, int skip) {
 
 	const char* cur = text;
 	int c_x = 0, c_y = 0, r = 0;
 	unsigned int c_cp = 0;
 
-	int dx=0, dy=0;
-	skinStartPaint(hWnd);
+	if (w < 0) return 0;
+	int dx = 0;
 
-	for (int ix=0; ix < (w / 5); ix++) {
-		skinBlit(hWnd, skin.text, 150,0,x+(ix*5),y,5,6); //tile
-	}
+	for (int ix=0; ix < (w / 5); ix++) 
+		skinBlit(hWnd, skin.text, 150,0,x+(ix*5),y,5,6); //tile with empty space
 
+	int chars = 0;
 	do {
 		r = iterate_utf8_codepoint(cur,&c_cp);
 		//printf("Character '%.*s' (%db) has a code %d\n",r,cur,r,c_cp);
-		if (r == 0) continue;
-		if ((c_cp == '\n') || (c_cp == '\r')) {dx = 0; dy += 6; continue; }
+		if (r == 0) return 0;
 
-		find_utf8char_in_utf8layout(c_cp, text_layout, &c_x, &c_y); 
+		if (chars >= skip) {
+			find_utf8char_in_utf8layout(c_cp, text_layout, &c_x, &c_y); 
 
-		skinBlit(hWnd, skin.text, c_x*5, c_y*6, x + dx, y + dy, (c_cp == '@' ? 7 : 5), 6);
-		dx += (c_cp == '@' ? 7 : 5);
+			if (dx >= w) return 0; //if we're already full, end here.
 
+			skinBlit(hWnd, skin.text, (c_x*5), c_y*6, x + dx, y, 5, 6);
+
+			dx += 5;
+		}
 		cur += r;
+		chars++;
+
 	} while (r > 0);
-	skinEndPaint(hWnd);
+	return 0;
 }
 
 CONST RECT mainTitleRect = {.left = 0, .top = 0, .right = 275, .bottom = 14};
@@ -227,6 +295,8 @@ enum windowbuttons {
 
 struct element mw_elements[WE_COUNT] = {
 	{  .x = 0,   .y = 0, .w = 275,  .h = 14}, //titlebar
+	{  .x = 22,  .y = 26,.w =  79,  .h = 15}, //timer
+	{  .x = 110, .y = 27,.w = 155,  .h = 6},  //title scroller 
 };
 
 struct element mw_buttons[WB_COUNT] = {
@@ -259,6 +329,7 @@ int handleHoldEvents(HWND hWnd) {
 		e->bs = hold(e->x,e->y,e->w,e->h,1);
 		if (e->bs != e->obs) invalidateXYWH(h_mainwin,e->x,e->y,e->w,e->h);
 	}
+	return 0;
 }
 
 int get_click_button() {
@@ -290,30 +361,28 @@ int handleClickEvents(HWND hWnd) {
 			      if (op->IsPlaying()) ip->Stop();
 			      break;
 		case WB_OPEN: {
-			      OPENFILENAME ofn = {
-				      .lStructSize = sizeof ofn,
-				      .hwndOwner = h_mainwin,
-				      .hInstance = NULL,
-				      .lpstrFilter = "MP3 Files\0*.mp3\0\0",
-				      .lpstrCustomFilter = NULL,
-				      .nMaxCustFilter = 0,
-				      .nFilterIndex = 1,
-				      .lpstrFile = filePath,
-				      .nMaxFile = 1024,
-			      };
-			      BOOL r = GetOpenFileName(&ofn);
-			      if (!r) break;
+				      OPENFILENAME ofn = {
+					      .lStructSize = sizeof ofn,
+					      .hwndOwner = h_mainwin,
+					      .hInstance = NULL,
+					      .lpstrFilter = "MP3 Files\0*.mp3\0\0",
+					      .lpstrCustomFilter = NULL,
+					      .nMaxCustFilter = 0,
+					      .nFilterIndex = 1,
+					      .lpstrFile = filePath,
+					      .nMaxFile = 1024,
+				      };
+				      BOOL r = GetOpenFileName(&ofn);
+				      if (!r) break;
 			      }
 		case WB_PLAY:
 			      if (op->IsPlaying()) ip->Stop();
 			      ip->Play(filePath);
-			      /*
-			      char* basepath = strrchr(filePath,'\\');
-			      if (!basepath) basepath = filePath; else basepath++;*/
-			      invalidateXYWH(h_mainwin,110,27,155,6);
-			      skinDrawText(h_mainwin,"привет winamp äöå.mp3",110,27,155);
+
+
 			      break;
 	}
+	return 0;
 }
 
 int find_element_to_update(unsigned int element_c, struct element* element_v, struct element** cur) {
@@ -352,18 +421,35 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			PostQuitMessage(0);
 			return 0;
 			break;
-		case WM_TIMER: 
-			if (op->IsPlaying()) {
-				int len = ip->GetLength();
-				int cur = ip->GetOutputTime();
+		case WM_TIMER:
+			timercnt++;	
 
-				int xpos = (cur * 219) / len;
-				if (xpos < 0) xpos = 0;
-				if (xpos >= 219) xpos = 219;
-				mw_buttons[WB_SCROLLBAR].value = xpos;
-				mw_buttons[WB_SCROLLBAR].bs = mw_buttons[WB_SCROLLBAR].obs + 1;
-			} else mw_buttons[WB_SCROLLBAR].value = -1;
-			invalidateXYWH(h_mainwin,16,72,248,10);
+			if ((timercnt % 10) == 0) { //scroll bar
+				if (op->IsPlaying()) {
+					int len = ip->GetLength();
+					int cur = ip->GetOutputTime();
+
+					int xpos = (cur * 219) / len;
+					if (xpos < 0) xpos = 0;
+					if (xpos >= 219) xpos = 219;
+					mw_buttons[WB_SCROLLBAR].value = xpos;
+					mw_buttons[WB_SCROLLBAR].bs = mw_buttons[WB_SCROLLBAR].obs + 1;
+				} else mw_buttons[WB_SCROLLBAR].value = -1;
+			}
+
+			if (op->IsPlaying()) {
+				if ((timercnt % 5) == 0) scrollcnt++; 
+				mw_elements[WE_TITLE].bs = 1 + scrollcnt;
+			} else {
+				scrollcnt = 0;
+				mw_elements[WE_TITLE].bs = 0;
+			}
+
+			for (int i=0; i < WE_COUNT; i++) {
+				struct element* e = &mw_elements[i];
+				if (e->bs != e->obs) invalidateXYWH(h_mainwin,e->x,e->y,e->w,e->h);
+			}
+
 			break;
 		case WM_NCHITTEST: {
 					   POINT mp = {GET_X_PARAM(lParam),GET_Y_PARAM(lParam) };
@@ -410,6 +496,34 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 								   skinBlit(hWnd, skin.titlebitmap, 27, 15, 0, 0, 275, 14);
 							   }
 							   break;
+						   case WE_TITLE: {
+
+									  char title[128];
+
+									  sprintf(title,"hello world");
+									  int titlesz = skinTextLength(title);
+
+									  if (op->IsPlaying()) {
+
+										  int lms = 0;
+										  char f_title[GETFILEINFO_TITLE_LENGTH];
+										  ip->GetFileInfo(NULL,f_title,&lms);
+
+										  snprintf(title,128,"%.112s (%d:%02d)",f_title, lms / (60 * 1000), abs((lms / 1000) % 60));
+										  titlesz = skinTextLength(title);
+										  if (titlesz > cur->w) { strcat(title, " *** "); titlesz = skinTextLength(title); }
+									  }
+									  
+									  while (scrollcnt >= skinTextLengthC(title)) scrollcnt = 0;
+
+									  if (titlesz <= (cur->w)) {
+										  skinDrawText(h_mainwin,title,cur->x,cur->y,cur->w,0);
+									  } else {
+										  skinDrawText(h_mainwin,title,cur->x,cur->y,cur->w,scrollcnt % titlesz);
+										  skinDrawText(h_mainwin,title,cur->x + titlesz - ((5*scrollcnt) % titlesz),cur->y,cur->w - (titlesz - ((5*scrollcnt) % titlesz)),0);
+									  }
+								  }
+								  break;
 					   }
 				   } while (cur);
 				   cur=&mw_buttons[0];
@@ -460,6 +574,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 		default:
 				   return DefWindowProc(hWnd,uMsg,wParam,lParam);
 	}
+	return 0;
 }
 
 WNDCLASS mainwin = {0,(WNDPROC)WindowProc,0,0,NULL,NULL,NULL,(HBRUSH) COLOR_BTNFACE+1,NULL,"helloMain"};
@@ -523,7 +638,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	skin.text = loadSkinBitmap("skin/text.bmp");
 
 	FILE* textlayout = NULL;
-	if (textlayout = fopen("skin/text.txt","rb")) {
+	if ( (textlayout = fopen("skin/text.txt","rb")) ) {
 
 		fseek(textlayout,0,SEEK_END);
 		long fsz = ftell(textlayout);
