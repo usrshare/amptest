@@ -5,7 +5,11 @@ PREFIX=i686-w64-mingw32-
 
 CC=$(PREFIX)gcc
 LD=$(PREFIX)ld
+ifeq ($(shell which windres),)
 WINDRES=$(PREFIX)windres
+else
+WINDRES=windres
+endif
 CFLAGS=-std=c11 -I/usr/share/mingw-w64/include -Wall -Wno-unknown-pragmas
 LIBS=-lcomctl32 -lgdi32 -mwindows
 
