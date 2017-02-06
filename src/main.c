@@ -31,6 +31,7 @@ struct skinData {
 struct skinData skin;
 
 HWND h_mainwin;
+
 HMENU h_mainmenu;
 
 bool doubleMode = false;
@@ -39,41 +40,73 @@ int timercnt = 0;
 int scrollcnt = 0;
 
 struct paintData {
+	HBITMAP hbmpBuf; // bitmap for double buffering
+	HDC hdcMemBuf; //hdcmem for dbl buffering
+
 	PAINTSTRUCT ps;
 	HDC hdc;
-	BITMAP bitmap;
 	HDC hdcMem;
-	HGDIOBJ oldBitmap;
 } spaint;
 
-int skinStartPaint(HWND hWnd) {
-	spaint.hdc = BeginPaint(hWnd, &(spaint.ps));
-	spaint.hdcMem = CreateCompatibleDC(spaint.hdc);
+int skinInitializePaint(HWND hWnd) {
+
+	HDC wndDC = GetDC(hWnd);
+	spaint.hdcMem = CreateCompatibleDC(wndDC);
+	spaint.hdcMemBuf = CreateCompatibleDC(wndDC);
+	spaint.hbmpBuf = CreateCompatibleBitmap(wndDC, 275, 116);
+	ReleaseDC(hWnd, wndDC);
+
 	return 0;
 }
 
-int skinEndPaint(HWND hWnd) {
-	DeleteDC(spaint.hdcMem);
-	spaint.hdcMem = 0;
+int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int h) {
+
+	BITMAP srcBuf; //source bitmap.
+	GetObject(src, sizeof srcBuf, &srcBuf);
+
+	HGDIOBJ oldSrcBuf = SelectObject(spaint.hdcMemBuf, src);
+	HGDIOBJ oldDstBuf = SelectObject(spaint.hdcMem, spaint.hbmpBuf);
+
+	BitBlt(spaint.hdcMem, xd, yd, w ? w : srcBuf.bmWidth, h ? h : srcBuf.bmHeight, spaint.hdcMemBuf, xs, ys, SRCCOPY);
+
+	SelectObject(spaint.hdcMem, oldDstBuf);
+	SelectObject(spaint.hdcMemBuf, oldSrcBuf);
+
+	return 0;
+}
+
+int windowBlit(HWND hWnd) {
+
+	BITMAP wndBuf; // window bitmap
+	GetObject(spaint.hbmpBuf, sizeof wndBuf, &wndBuf);
+
+	spaint.hdc = BeginPaint(hWnd, &(spaint.ps));
+
+	HGDIOBJ oldBmp = SelectObject(spaint.hdcMem, spaint.hbmpBuf);
+	BitBlt(spaint.hdc, 0, 0, wndBuf.bmWidth, wndBuf.bmHeight, spaint.hdcMem, 0, 0, SRCCOPY); //entire bitmap
+	SelectObject(spaint.hdcMem,oldBmp);
+
 	EndPaint(hWnd, &(spaint.ps));
 	return 0;
 }
 
-int skinBlit(HWND hWnd, HBITMAP hbm, int xs, int ys, int xd, int yd, int w, int h) {
+int skinDestroyPaint(HWND hWnd) {
 
-	GetObject(hbm, sizeof(spaint.bitmap), &(spaint.bitmap));
-	spaint.oldBitmap = SelectObject(spaint.hdcMem, hbm);
-	if (doubleMode) {
-		StretchBlt(spaint.hdc, xd*2, yd*2, (w ? w : spaint.bitmap.bmWidth)*2, (h ? h : spaint.bitmap.bmHeight)*2, spaint.hdcMem, xs, ys, w ? w : spaint.bitmap.bmWidth, h ? h : spaint.bitmap.bmHeight, SRCCOPY);
-	} else {
-		BitBlt(spaint.hdc, xd, yd, w ? w : spaint.bitmap.bmWidth, h ? h : spaint.bitmap.bmHeight, spaint.hdcMem, xs, ys, SRCCOPY);
-	}
-	SelectObject(spaint.hdcMem, spaint.oldBitmap);
+	DeleteObject(spaint.hbmpBuf);
+	DeleteDC(spaint.hdcMemBuf);
+	spaint.hdcMemBuf = 0;
+	DeleteDC(spaint.hdcMem);
+	spaint.hdcMem = 0;
 	return 0;
 }
 
+
+
 int iterate_utf8_codepoint(const char* cur, unsigned int* u_val) {
 
+	if ((!cur) || (!u_val)) {
+		return -1;
+	}
 	const unsigned char* c = (const unsigned char*) cur;
 
 	if (c[0] == 0)   { *u_val = 0; return 0; }
@@ -204,6 +237,16 @@ int skinDrawText(HWND hWnd, const char* text, int x, int y, int w, int skip) {
 
 CONST RECT mainTitleRect = {.left = 0, .top = 0, .right = 275, .bottom = 14};
 
+struct mouseData {
+	short clickX;
+	short clickY;
+	short releaseX;
+	short releaseY;
+	short x;
+	short y;
+	short buttons;
+};
+
 short mouseClickX = -1;
 short mouseClickY = -1;
 short mouseReleaseX = -1;
@@ -261,6 +304,7 @@ struct element {
 };
 
 enum windowelements {
+	WE_BACKGROUND,
 	WE_TITLEBAR,
 	WE_TIMER,
 	WE_TITLE,
@@ -294,6 +338,7 @@ enum windowbuttons {
 };
 
 struct element mw_elements[WE_COUNT] = {
+	{  .x = 0,   .y = 0, .w = 275, .h = 116}, //window background
 	{  .x = 0,   .y = 0, .w = 275,  .h = 14}, //titlebar
 	{  .x = 22,  .y = 26,.w =  79,  .h = 15}, //timer
 	{  .x = 110, .y = 27,.w = 155,  .h = 6},  //title scroller 
@@ -411,6 +456,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			return DefWindowProc(hWnd,uMsg,wParam,lParam);
 			break;
 		case WM_CREATE:
+			skinInitializePaint(hWnd);
 			return 0;
 			break;
 		case WM_COMMAND:
@@ -418,6 +464,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			return 0;
 			break;
 		case WM_DESTROY:
+			skinDestroyPaint(hWnd);
 			PostQuitMessage(0);
 			return 0;
 			break;
@@ -479,100 +526,104 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				   mouseY = HIWORD(lParam);
 				   handleHoldEvents(hWnd);
 				   return DefWindowProc(hWnd,uMsg,wParam,lParam);
-		case WM_PAINT: 
-				   skinStartPaint(hWnd);
-				   skinBlit(hWnd, skin.mainbitmap, 0, 0, 0, 0, 0, 0);
+		case WM_PAINT: {
+			
 
-				   int i=0;
-				   struct element* cur = &mw_elements[0];
-				   do {
-					   i = find_element_to_update(WE_COUNT,mw_elements,&cur);
+				       int i=0;
+				       struct element* cur = &mw_elements[0];
+				       do {
+					       i = find_element_to_update(WE_COUNT,mw_elements,&cur);
 
-					   switch (cur - mw_elements) {
-						   case WE_TITLEBAR:
-							   if (GetForegroundWindow() == hWnd) {
-								   skinBlit(hWnd, skin.titlebitmap, 27, 0, 0, 0, 275, 14);
-							   } else {
-								   skinBlit(hWnd, skin.titlebitmap, 27, 15, 0, 0, 275, 14);
-							   }
-							   break;
-						   case WE_TITLE: {
+					       switch (cur - mw_elements) {
+						       case WE_BACKGROUND:
+				       			skinBlit(hWnd, skin.mainbitmap, 0, 0, 0, 0, 0, 0);
+							break;
+						       case WE_TITLEBAR:
+							       if (GetForegroundWindow() == hWnd) {
+								       skinBlit(hWnd, skin.titlebitmap, 27, 0, 0, 0, 275, 14);
+							       } else {
+								       skinBlit(hWnd, skin.titlebitmap, 27, 15, 0, 0, 275, 14);
+							       }
+							       break;
+						       case WE_TITLE: {
 
-									  char title[128];
+									      char title[128];
 
-									  sprintf(title,"hello world");
-									  int titlesz = skinTextLength(title);
+									      sprintf(title,"hello world");
+									      int titlesz = skinTextLength(title);
 
-									  if (op->IsPlaying()) {
+									      if (op->IsPlaying()) {
 
-										  int lms = 0;
-										  char f_title[GETFILEINFO_TITLE_LENGTH];
-										  ip->GetFileInfo(NULL,f_title,&lms);
+										      int lms = 0;
+										      char f_title[GETFILEINFO_TITLE_LENGTH];
+										      ip->GetFileInfo(NULL,f_title,&lms);
 
-										  snprintf(title,128,"%.112s (%d:%02d)",f_title, lms / (60 * 1000), abs((lms / 1000) % 60));
-										  titlesz = skinTextLength(title);
-										  if (titlesz > cur->w) { strcat(title, " *** "); titlesz = skinTextLength(title); }
-									  }
-									  
-									  while (scrollcnt >= skinTextLengthC(title)) scrollcnt = 0;
+										      snprintf(title,128,"%.112s (%d:%02d)",f_title, lms / (60 * 1000), abs((lms / 1000) % 60));
+										      titlesz = skinTextLength(title);
+										      if (titlesz > cur->w) { strcat(title, " *** "); titlesz = skinTextLength(title); }
+									      }
 
-									  if (titlesz <= (cur->w)) {
-										  skinDrawText(h_mainwin,title,cur->x,cur->y,cur->w,0);
-									  } else {
-										  skinDrawText(h_mainwin,title,cur->x,cur->y,cur->w,scrollcnt % titlesz);
-										  skinDrawText(h_mainwin,title,cur->x + titlesz - ((5*scrollcnt) % titlesz),cur->y,cur->w - (titlesz - ((5*scrollcnt) % titlesz)),0);
-									  }
-								  }
-								  break;
-					   }
-				   } while (cur);
-				   cur=&mw_buttons[0];
-				   do {
-					   i = find_element_to_update(WB_COUNT,mw_buttons,&cur);
-					   switch(cur - mw_buttons) {
-						   case WB_MENU:
-							   skinBlit(hWnd, skin.titlebitmap,0,i ? 9 : 0,6,3,9,9);
-							   break;
-						   case WB_MINIMIZE:
-							   skinBlit(hWnd, skin.titlebitmap,9,i ? 9 : 0,244,3,9,9);
-							   break;
-						   case WB_WINDOWSHADE:
-							   skinBlit(hWnd, skin.titlebitmap,i ? 9 : 0,18,254,3,9,9);
-							   break;
-						   case WB_CLOSE:
-							   skinBlit(hWnd, skin.titlebitmap,18,i ? 9 : 0,264,3,9,9);
-							   break;
-						   case WB_PREV:
-							   skinBlit(hWnd, skin.cbuttons, 0, i ? 18 : 0, 16,88,23,18);
-							   break;	
-						   case WB_PLAY:
-							   skinBlit(hWnd, skin.cbuttons, 23, i ? 18 : 0, 16+23,88,23,18);
-							   break;	
-						   case WB_PAUSE:
-							   skinBlit(hWnd, skin.cbuttons, 46, i ? 18 : 0, 16+46,88,23,18);
-							   break;	
-						   case WB_STOP:
-							   skinBlit(hWnd, skin.cbuttons, 69, i ? 18 : 0, 16+69,88,23,18);
-							   break;	
-						   case WB_NEXT:
-							   skinBlit(hWnd, skin.cbuttons, 92, i ? 18 : 0, 16+92,88,22,18);
-							   break;
-						   case WB_OPEN:
-							   skinBlit(hWnd, skin.cbuttons, 114, i ? 16 : 0, 136,89,22,16);
-							   break; 
-						   case WB_SCROLLBAR:
-							   if (mw_buttons[WB_SCROLLBAR].value >= 0) {
-								   skinBlit(hWnd, skin.posbar, 0, 0, 16, 72, 248, 10); 
-								   skinBlit(hWnd, skin.posbar, 248, 0, 16 + mw_buttons[WB_SCROLLBAR].value, 72, 29, 10); 
-							   } else {
-								   skinBlit(hWnd, skin.mainbitmap, 16, 72, 16, 72, 248, 10); 
-							   }
-					   }
-				   } while (cur);
-				   skinEndPaint(hWnd);
-				   break;
+									      while (scrollcnt >= skinTextLengthC(title)) scrollcnt = 0;
+
+									      if (titlesz <= (cur->w)) {
+										      skinDrawText(h_mainwin,title,cur->x,cur->y,cur->w,0);
+									      } else {
+										      skinDrawText(h_mainwin,title,cur->x,cur->y,cur->w,scrollcnt % titlesz);
+										      skinDrawText(h_mainwin,title,cur->x + titlesz - ((5*scrollcnt) % titlesz),cur->y,cur->w - (titlesz - ((5*scrollcnt) % titlesz)),0);
+									      }
+								      }
+								      break;
+					       }
+				       } while (cur);
+				       cur=&mw_buttons[0];
+				       do {
+					       i = find_element_to_update(WB_COUNT,mw_buttons,&cur);
+					       switch(cur - mw_buttons) {
+						       case WB_MENU:
+							       skinBlit(hWnd, skin.titlebitmap,0,i ? 9 : 0,6,3,9,9);
+							       break;
+						       case WB_MINIMIZE:
+							       skinBlit(hWnd, skin.titlebitmap,9,i ? 9 : 0,244,3,9,9);
+							       break;
+						       case WB_WINDOWSHADE:
+							       skinBlit(hWnd, skin.titlebitmap,i ? 9 : 0,18,254,3,9,9);
+							       break;
+						       case WB_CLOSE:
+							       skinBlit(hWnd, skin.titlebitmap,18,i ? 9 : 0,264,3,9,9);
+							       break;
+						       case WB_PREV:
+							       skinBlit(hWnd, skin.cbuttons, 0, i ? 18 : 0, 16,88,23,18);
+							       break;	
+						       case WB_PLAY:
+							       skinBlit(hWnd, skin.cbuttons, 23, i ? 18 : 0, 16+23,88,23,18);
+							       break;	
+						       case WB_PAUSE:
+							       skinBlit(hWnd, skin.cbuttons, 46, i ? 18 : 0, 16+46,88,23,18);
+							       break;	
+						       case WB_STOP:
+							       skinBlit(hWnd, skin.cbuttons, 69, i ? 18 : 0, 16+69,88,23,18);
+							       break;	
+						       case WB_NEXT:
+							       skinBlit(hWnd, skin.cbuttons, 92, i ? 18 : 0, 16+92,88,22,18);
+							       break;
+						       case WB_OPEN:
+							       skinBlit(hWnd, skin.cbuttons, 114, i ? 16 : 0, 136,89,22,16);
+							       break; 
+						       case WB_SCROLLBAR:
+							       if (mw_buttons[WB_SCROLLBAR].value >= 0) {
+								       skinBlit(hWnd, skin.posbar, 0, 0, 16, 72, 248, 10); 
+								       skinBlit(hWnd, skin.posbar, 248, 0, 16 + mw_buttons[WB_SCROLLBAR].value, 72, 29, 10); 
+							       } else {
+								       skinBlit(hWnd, skin.mainbitmap, 16, 72, 16, 72, 248, 10); 
+							       }
+					       }
+				       } while (cur);
+
+				       windowBlit(hWnd);
+				       break;
+			       }
 		default:
-				   return DefWindowProc(hWnd,uMsg,wParam,lParam);
+			       return DefWindowProc(hWnd,uMsg,wParam,lParam);
 	}
 	return 0;
 }
@@ -598,9 +649,7 @@ int ampInit() {
 HBITMAP loadSkinBitmap (const char* filename) {
 	HBITMAP r = LoadImage(NULL, filename, IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
 	if (r == NULL) {
-		char errortxt[256];
-		snprintf(errortxt,256,"Unable to load %s", filename);
-		msgerror(errortxt);
+		msgerror(filename);
 	}
 	return r;
 }
@@ -629,13 +678,14 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	h_mainwin = CreateWindowEx(0, "helloMain", "hello world", WS_VISIBLE | WS_POPUP, 128, 128, 275, 116, NULL, NULL, mainwin.hInstance, NULL);
 
+
 	SetTimer(h_mainwin,0,50,NULL);
 
-	skin.mainbitmap = loadSkinBitmap("skin/main.bmp");
-	skin.titlebitmap = loadSkinBitmap("skin/titlebar.bmp");
-	skin.cbuttons = loadSkinBitmap("skin/cbuttons.bmp");
-	skin.posbar = loadSkinBitmap("skin/posbar.bmp");
-	skin.text = loadSkinBitmap("skin/text.bmp");
+	skin.mainbitmap = loadSkinBitmap("skin\\main.bmp");
+	skin.titlebitmap = loadSkinBitmap("skin\\titlebar.bmp");
+	skin.cbuttons = loadSkinBitmap("skin\\cbuttons.bmp");
+	skin.posbar = loadSkinBitmap("skin\\posbar.bmp");
+	skin.text = loadSkinBitmap("skin\\text.bmp");
 
 	FILE* textlayout = NULL;
 	if ( (textlayout = fopen("skin/text.txt","rb")) ) {

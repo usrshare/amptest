@@ -2,12 +2,12 @@
 #include <windows.h>
 #include <stdio.h>
 
-int msgerror(char* prefix) {
+int msgerror(const char* prefix) {
 
 	DWORD errcode = GetLastError();
 	char errortxt[256];
 
-	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM,NULL,errcode,0,errortxt,256,NULL);
+	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS ,NULL,errcode,0,errortxt,256,NULL);
 	char msgtxt[1024];
 	if (prefix) {
 		snprintf(msgtxt,1024,"%s: %s (%d)",prefix,errortxt,errcode);
