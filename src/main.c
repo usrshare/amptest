@@ -28,6 +28,13 @@ struct skinData {
 	HBITMAP text;
 } skin;
 
+struct playbackData {
+	int bitrate;
+	int samplerate;
+	int stereo;
+	int synched;
+} pb;
+
 HWND h_mainwin;
 
 HMENU h_mainmenu;
@@ -36,6 +43,7 @@ bool doubleMode = false;
 
 int timercnt = 0;
 int scrollcnt = 0;
+
 
 struct windowData {
 	HBITMAP hbmpBuf; // bitmap for double buffering
@@ -348,6 +356,8 @@ struct element mw_elements[WE_COUNT] = {
 	{  .x = 0,   .y = 0, .w = 275,  .h = 14}, //titlebar
 	{  .x = 22,  .y = 26,.w =  79,  .h = 15}, //timer
 	{  .x = 110, .y = 27,.w = 155,  .h = 6},  //title scroller 
+	{  .x = 111, .y = 43,.w = 15,   .h = 6},  //bitrate
+	{  .x = 156, .y = 43,.w = 10,   .h = 6},  //sample rate
 };
 
 struct element mw_buttons[WB_COUNT] = {
@@ -369,6 +379,24 @@ struct element mw_buttons[WB_COUNT] = {
 	{  .x = 136, .y = 89, .w = 22, .h = 16}, //open
 
 };
+
+void UI_SetInfo(int br, int sr, int st, int synch) {
+	if (br != -1) {
+	pb.bitrate = br;
+	mw_elements[WE_BITRATE].bs = br;
+	}
+	if (sr != -1) {
+	pb.samplerate = sr;
+	mw_elements[WE_MIXRATE].bs = sr;
+	}
+	if (st != -1) {
+	pb.stereo = st;
+	}
+	if (synch != -1) {
+	pb.synched = synch;
+	}
+	//mw_elements[WE_MONOSTER].bs = 1024 | st;
+}
 
 int handleHoldEvents(HWND hWnd) {
 
@@ -492,7 +520,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 					if (xpos < 0) xpos = 0;
 					if (xpos >= 219) xpos = 219;
 					mw_buttons[WB_SCROLLBAR].value = xpos;
-					mw_buttons[WB_SCROLLBAR].bs = mw_buttons[WB_SCROLLBAR].obs + 1;
+					mw_buttons[WB_SCROLLBAR].bs = xpos;
 				} else mw_buttons[WB_SCROLLBAR].value = -1;
 			}
 
@@ -585,6 +613,20 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 									      }
 								      }
 								      break;
+							case WE_BITRATE: {
+										 invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
+										 char bitrate[4];
+										 snprintf(bitrate,4,"%3d",pb.bitrate);
+										 skinDrawText(h_mainwin,bitrate,cur->x,cur->y,cur->w,0);
+										 break;
+									 }
+							case WE_MIXRATE: {
+										 invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
+										 char samplerate[3];
+										 snprintf(samplerate,3,"%2d",pb.samplerate);
+										 skinDrawText(h_mainwin,samplerate,cur->x,cur->y,cur->w,0);
+										 break;
+									 }
 					       }
 				       } while (cur);
 				       cur=&mw_buttons[0];
@@ -649,6 +691,7 @@ int ampInit() {
 	if (!op) { return 1; }
 
 	ip = loadInputPlugin("plugins/in_mp3.dll",op);
+	ip->SetInfo = UI_SetInfo;
 	if (!ip) { return 1; }
 
 	ip->hMainWindow = h_mainwin;
