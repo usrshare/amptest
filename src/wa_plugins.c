@@ -27,7 +27,7 @@ struct waInputPlugin* loadInputPlugin(const char* filename, struct waOutputPlugi
 	// to prevent plugins from crashing, the pointers all point to empty
 	// functions that either return nothing or zero.
 
-	ip->SAGetMode = emptyfunc;
+	ip->SAGetMode = return0;
 	ip->SAAdd = emptyfunc;
 	ip->SAAddPCMData = emptyfunc;
 	ip->VSAAddPCMData = emptyfunc;

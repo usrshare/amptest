@@ -26,9 +26,7 @@ struct skinData {
 	HBITMAP cbuttons;
 	HBITMAP posbar;
 	HBITMAP text;
-};
-
-struct skinData skin;
+} skin;
 
 HWND h_mainwin;
 
@@ -39,21 +37,26 @@ bool doubleMode = false;
 int timercnt = 0;
 int scrollcnt = 0;
 
-struct paintData {
+struct windowData {
 	HBITMAP hbmpBuf; // bitmap for double buffering
 	HDC hdcMemBuf; //hdcmem for dbl buffering
 
 	PAINTSTRUCT ps;
 	HDC hdc;
 	HDC hdcMem;
-} spaint;
+};
+
+struct windowData* getWindowData(HWND hWnd) {
+	return (struct windowData*) GetWindowLongPtr(hWnd,0);
+}
 
 int skinInitializePaint(HWND hWnd) {
 
 	HDC wndDC = GetDC(hWnd);
-	spaint.hdcMem = CreateCompatibleDC(wndDC);
-	spaint.hdcMemBuf = CreateCompatibleDC(wndDC);
-	spaint.hbmpBuf = CreateCompatibleBitmap(wndDC, 275, 116);
+	struct windowData* wdata = getWindowData(hWnd);
+	wdata->hdcMem = CreateCompatibleDC(wndDC);
+	wdata->hdcMemBuf = CreateCompatibleDC(wndDC);
+	wdata->hbmpBuf = CreateCompatibleBitmap(wndDC, 275, 116);
 	ReleaseDC(hWnd, wndDC);
 
 	return 0;
@@ -61,42 +64,45 @@ int skinInitializePaint(HWND hWnd) {
 
 int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int h) {
 
+	struct windowData* wdata = getWindowData(hWnd);
 	BITMAP srcBuf; //source bitmap.
 	GetObject(src, sizeof srcBuf, &srcBuf);
 
-	HGDIOBJ oldSrcBuf = SelectObject(spaint.hdcMemBuf, src);
-	HGDIOBJ oldDstBuf = SelectObject(spaint.hdcMem, spaint.hbmpBuf);
+	HGDIOBJ oldSrcBuf = SelectObject(wdata->hdcMemBuf, src);
+	HGDIOBJ oldDstBuf = SelectObject(wdata->hdcMem, wdata->hbmpBuf);
 
-	BitBlt(spaint.hdcMem, xd, yd, w ? w : srcBuf.bmWidth, h ? h : srcBuf.bmHeight, spaint.hdcMemBuf, xs, ys, SRCCOPY);
+	BitBlt(wdata->hdcMem, xd, yd, w ? w : srcBuf.bmWidth, h ? h : srcBuf.bmHeight, wdata->hdcMemBuf, xs, ys, SRCCOPY);
 
-	SelectObject(spaint.hdcMem, oldDstBuf);
-	SelectObject(spaint.hdcMemBuf, oldSrcBuf);
+	SelectObject(wdata->hdcMem, oldDstBuf);
+	SelectObject(wdata->hdcMemBuf, oldSrcBuf);
 
 	return 0;
 }
 
 int windowBlit(HWND hWnd) {
 
+	struct windowData* wdata = getWindowData(hWnd);
 	BITMAP wndBuf; // window bitmap
-	GetObject(spaint.hbmpBuf, sizeof wndBuf, &wndBuf);
+	GetObject(wdata->hbmpBuf, sizeof wndBuf, &wndBuf);
 
-	spaint.hdc = BeginPaint(hWnd, &(spaint.ps));
+	wdata->hdc = BeginPaint(hWnd, &(wdata->ps));
 
-	HGDIOBJ oldBmp = SelectObject(spaint.hdcMem, spaint.hbmpBuf);
-	BitBlt(spaint.hdc, 0, 0, wndBuf.bmWidth, wndBuf.bmHeight, spaint.hdcMem, 0, 0, SRCCOPY); //entire bitmap
-	SelectObject(spaint.hdcMem,oldBmp);
+	HGDIOBJ oldBmp = SelectObject(wdata->hdcMem, wdata->hbmpBuf);
+	BitBlt(wdata->hdc, 0, 0, wndBuf.bmWidth, wndBuf.bmHeight, wdata->hdcMem, 0, 0, SRCCOPY); //entire bitmap
+	SelectObject(wdata->hdcMem,oldBmp);
 
-	EndPaint(hWnd, &(spaint.ps));
+	EndPaint(hWnd, &(wdata->ps));
 	return 0;
 }
 
 int skinDestroyPaint(HWND hWnd) {
 
-	DeleteObject(spaint.hbmpBuf);
-	DeleteDC(spaint.hdcMemBuf);
-	spaint.hdcMemBuf = 0;
-	DeleteDC(spaint.hdcMem);
-	spaint.hdcMem = 0;
+	struct windowData* wdata = getWindowData(hWnd);
+	DeleteObject(wdata->hbmpBuf);
+	DeleteDC(wdata->hdcMemBuf);
+	wdata->hdcMemBuf = 0;
+	DeleteDC(wdata->hdcMem);
+	wdata->hdcMem = 0;
 	return 0;
 }
 
@@ -446,6 +452,7 @@ int GET_X_PARAM(LPARAM lParam) { return (int)(lParam & 0xFFFF); }
 int GET_Y_PARAM(LPARAM lParam) { return (int)(lParam >> 16); }
 #endif
 
+
 LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 	switch(uMsg) {
@@ -455,16 +462,21 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			if (mw_elements[WE_TITLEBAR].bs != mw_elements[WE_TITLEBAR].obs) InvalidateRect(hWnd,&mainTitleRect,0);
 			return DefWindowProc(hWnd,uMsg,wParam,lParam);
 			break;
-		case WM_CREATE:
+		case WM_CREATE: {
+			//create the struct and store it in the pointer provided.
+			struct windowData* wd = malloc(sizeof(struct windowData));
+			memset(wd, 0, sizeof *wd);
+			SetWindowLongPtr(hWnd,0,(LONG_PTR)wd);
 			skinInitializePaint(hWnd);
 			return 0;
-			break;
+			break; }
 		case WM_COMMAND:
 			//if (LOWORD(wParam) == 1) ip->Play("demo.mp3");
 			return 0;
 			break;
 		case WM_DESTROY:
 			skinDestroyPaint(hWnd);
+			free (getWindowData(hWnd)); //free the data now that the window is gone.
 			PostQuitMessage(0);
 			return 0;
 			break;
@@ -610,6 +622,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 							       skinBlit(hWnd, skin.cbuttons, 114, i ? 16 : 0, 136,89,22,16);
 							       break; 
 						       case WB_SCROLLBAR:
+							       invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
 							       if (mw_buttons[WB_SCROLLBAR].value >= 0) {
 								       skinBlit(hWnd, skin.posbar, 0, 0, 16, 72, 248, 10); 
 								       skinBlit(hWnd, skin.posbar, 248, 0, 16 + mw_buttons[WB_SCROLLBAR].value, 72, 29, 10); 
@@ -628,7 +641,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	return 0;
 }
 
-WNDCLASS mainwin = {0,(WNDPROC)WindowProc,0,0,NULL,NULL,NULL,(HBRUSH) COLOR_BTNFACE+1,NULL,"helloMain"};
+WNDCLASS mainwin = {0,(WNDPROC)WindowProc,0,sizeof (void*),NULL,NULL,NULL,(HBRUSH) COLOR_BTNFACE+1,NULL,"helloMain"};
 
 int ampInit() {
 
