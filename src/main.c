@@ -48,14 +48,25 @@ bool doubleMode = false;
 int timercnt = 0;
 int scrollcnt = 0;
 
+enum window_types {
+    WT_MAIN = 0,
+    WT_EQUALIZER,
+    WT_PLAYLIST
+};
 
 struct windowData {
+
+    //this struct is allocated for each instance of a window and pointed to with
+    //set/getWindowData(). any function that receives an hWnd can get the pointer
+    //to the structure.
+
+    enum window_types type; //useful for determining which elements this window controls
     HBITMAP hbmpBuf; // bitmap for double buffering
     HDC hdcMemBuf; //hdcmem for dbl buffering
 
     PAINTSTRUCT ps;
-    HDC hdc;
-    HDC hdcMem;
+    HDC hdc; //hdc for the window itself
+    HDC hdcMem; //hdcMem for the window itself
 };
 
 struct windowData* getWindowData(HWND hWnd) {
@@ -76,6 +87,10 @@ int skinInitializePaint(HWND hWnd) {
 
 int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int h) {
 
+    //this function is used whenever part of a window has to be updated.
+    //it can be called at any moment.
+    //it updates the hbmpBuf bitmap.
+
     struct windowData* wdata = getWindowData(hWnd);
     BITMAP srcBuf; //source bitmap.
     GetObject(src, sizeof srcBuf, &srcBuf);
@@ -92,6 +107,9 @@ int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int 
 }
 
 int windowBlit(HWND hWnd) {
+
+    //this function is only used at the end of the WM_PAINT message, and it
+    //redraws the entire window from the bitmap.
 
     struct windowData* wdata = getWindowData(hWnd);
     BITMAP wndBuf; // window bitmap
@@ -340,12 +358,27 @@ int invalidateXYWH(HWND hWnd, UINT x, UINT y, UINT w, UINT h) {
     return InvalidateRect(hWnd,&r,0);
 }
 
+enum element_avail {
+    EA_NEVER = 0, //never available
+    EA_NORMAL = 1, //only when the window is in its normal state
+    EA_WINSHADE = 2, //only when the window is in (yet to be implemented) windowshade
+    EA_ALWAYS = 3, //always
+};
+
 struct element {
 
     unsigned int x,y,w,h; //position
+    
+    int obs,bs; //old state and current state. whenever bs != obs, this element
+		//is redrawn.
+    
+    enum element_avail avail; //when is the element available
     int button; //specifies if the element should be treated as a button
-    int obs,bs; //state. if obs != bs, redraw.
-    int value; //additional value.
+		//that means the window can't be dragged by this element,
+		//and that bs can be rewritten if the btton is held.
+    
+    int value; //additional value. useful for elements where button==1 and
+		//therefore bs can't always hold the useful value.
 };
 
 enum windowelements {
