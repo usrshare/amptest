@@ -343,6 +343,7 @@ int invalidateXYWH(HWND hWnd, UINT x, UINT y, UINT w, UINT h) {
 struct element {
 
     unsigned int x,y,w,h; //position
+    int button; //specifies if the element should be treated as a button
     int obs,bs; //state. if obs != bs, redraw.
     int value; //additional value.
 };
@@ -458,6 +459,13 @@ int get_click_button() {
 	if (click(cb->x,cb->y,cb->w,cb->h,1)) return i;
     }
     return -1;
+}
+
+int handleDoubleClickEvents(HWND hWnd) {
+
+    switch (get_click_button()) {
+    }
+    return 0;
 }
 
 int handleClickEvents(HWND hWnd) {
@@ -605,7 +613,13 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			   //handle all the "click" events here.
 			   handleClickEvents(hWnd);
 			   mouseButtons &= (~1);
-			   handleHoldEvents(hWnd);
+			   //handleHoldEvents(hWnd);
+			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
+	case WM_LBUTTONDBLCLK:
+			   mouseReleaseX = LOWORD(lParam);
+			   mouseReleaseY = HIWORD(lParam);
+			   handleDoubleClickEvents(hWnd);
+			   mouseButtons &= (~1);
 			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
 	case WM_MOUSEMOVE:
 			   mouseX = LOWORD(lParam);
