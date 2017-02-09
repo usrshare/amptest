@@ -253,6 +253,32 @@ int skinDrawText(HWND hWnd, const char* text, int x, int y, int w, int skip) {
     return 0;
 }
 
+const char* nums_ex_layout = "0123456789 -"; //
+
+int skinDrawTimeString(HWND hWnd, const char* text, int x, int y) {
+
+    const char* c = text;
+    int dx = x;
+    while (*c != 0) {
+	char* ex = strchr(nums_ex_layout, *c);
+	if (ex) {
+	    int sx = (ex - nums_ex_layout) * 9;
+	    skinBlit(hWnd,skin.nums_ex,sx,0,dx,y,9,13);
+	}
+	dx += 13;
+	c++;
+	if (c == text+3) dx += 2;
+    }
+    return 0;
+}
+
+int skinDrawTime(HWND hWnd, int time, int x, int y) {
+
+    char text[6];
+    snprintf(text,6,"% 03d%02d\n", time / 60, abs(time) % 60);
+    return skinDrawTimeString(hWnd,text,x,y);
+}
+
 CONST RECT mainTitleRect = {.left = 0, .top = 0, .right = 275, .bottom = 14};
 
 struct mouseData {
@@ -367,7 +393,7 @@ struct element mw_elements[WE_COUNT] = {
     {  .x = 0,   .y = 0, .w = 275, .h = 116}, //window background
     {  .x = 0,   .y = 0, .w = 275,  .h = 14}, //titlebar
     {  .x = 24,  .y = 28,.w =  11,  .h = 9},  //play/pause indicator
-    {  .x = 36,  .y = 26,.w =  63,  .h = 13}, //timer
+    {  .x = 35,  .y = 26,.w =  63,  .h = 13}, //timer
     {  .x = 110, .y = 27,.w = 155,  .h = 6},  //title scroller 
     {  .x = 111, .y = 43,.w = 15,   .h = 6},  //bitrate
     {  .x = 156, .y = 43,.w = 10,   .h = 6},  //sample rate
@@ -543,11 +569,13 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			    if ((timercnt % 5) == 0) scrollcnt++; 
 			    mw_elements[WE_TITLE].bs = 1 + scrollcnt;
 			    if (ip->IsPaused()) mw_elements[WE_PLAYPAUS].bs = PS_PAUSE;
+			    mw_elements[WE_TIMER].bs = (ip->GetOutputTime() / 1000);
 			} else {
 			    scrollcnt = 0;
 			    mw_elements[WE_TITLE].bs = 0;
 			    mw_elements[WE_MONOSTER].bs = 0; //remove both mono and stereo
 			    mw_elements[WE_PLAYPAUS].bs = PS_STOP;
+			    mw_elements[WE_TIMER].bs = INT_MIN;
 			}
 
 			for (int i=0; i < WE_COUNT; i++) {
@@ -625,6 +653,13 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 						     }
 						     break;
+				   case WE_TIMER: {
+						      if (cur->bs == INT_MIN) {
+						      skinDrawTimeString(hWnd, "     ", cur->x, cur->y);
+						      } else {
+							  skinDrawTime(hWnd, ip->GetOutputTime()/1000, cur->x, cur->y);
+						      }
+						      break; }
 				   case WE_TITLE: {
 
 						      char title[128];
