@@ -370,17 +370,17 @@ enum element_avail {
 struct element {
 
     unsigned int x,y,w,h; //position
-    
+
     int obs,bs; //old state and current state. whenever bs != obs, this element
-		//is redrawn.
-    
+    //is redrawn.
+
     enum element_avail avail; //when is the element available
     int button; //specifies if the element should be treated as a button
-		//that means the window can't be dragged by this element,
-		//and that bs can be rewritten if the btton is held.
-    
+    //that means the window can't be dragged by this element,
+    //and that bs can be rewritten if the btton is held.
+
     int value; //additional value. useful for elements where button==1 and
-		//therefore bs can't always hold the useful value.
+    //therefore bs can't always hold the useful value.
 };
 
 enum windowelements {
@@ -503,13 +503,38 @@ int handleDoubleClickEvents(HWND hWnd) {
     return 0;
 }
 
+int filePlay(void) {
+    if (op->IsPlaying()) ip->Stop();
+    ip->Play(filePath);
+    return 0;
+}
+
+int openFileAndPlay(void) {
+
+    OPENFILENAME ofn = {
+	.lStructSize = sizeof ofn,
+	.hwndOwner = h_mainwin,
+	.hInstance = NULL,
+	.lpstrFilter = "MP3 Files\0*.mp3\0\0",
+	.lpstrCustomFilter = NULL,
+	.nMaxCustFilter = 0,
+	.nFilterIndex = 1,
+	.lpstrFile = filePath,
+	.nMaxFile = 1024,
+    };
+    BOOL r = GetOpenFileName(&ofn);
+    if (!r) return 1;
+    return filePlay();
+}
+
 int handleClickEvents(HWND hWnd) {
 
     switch (get_click_button()) {
 	case WB_MENU: {
 			  POINT mp = {.x = 6, .y = 12};
 			  MapWindowPoints(hWnd,NULL,&mp,1);
-			  TrackPopupMenuEx(h_mainmenu,TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON,mp.x,mp.y,h_mainwin,NULL);
+			  HMENU h_sysmenu = GetSubMenu(h_mainmenu, 0);
+			  TrackPopupMenuEx(h_sysmenu,TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON,mp.x,mp.y,h_mainwin,NULL);
 			  break; }
 	case WB_CLOSE:
 		      ExitProcess(0);
@@ -582,10 +607,32 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			    skinInitializePaint(hWnd);
 			    return 0;
 			    break; }
-	case WM_COMMAND:
+	case WM_COMMAND: {
+			int menuid = LOWORD(wParam);
+			if (HIWORD(wParam) == 0) {
+			    switch (menuid) {
+				case IDM_I_OPENFILE:
+				    return openFileAndPlay();
+				    break;
+				case IDM_I_OPENLOC:
+				    break;
+				case IDM_I_OPENURL:
+				    break;
+				case IDM_I_FILEINFO:
+				    ip->InfoBox(filePath, hWnd);
+				    break;
+				case IDM_I_ABOUT:
+				    MessageBoxA(hWnd, "amptest - https://github.com/usrshare/amptest/", "About amptest", MB_ICONINFORMATION);
+				    break;
+				case IDM_I_EXIT:
+				    ExitProcess(0);
+				    break;
+			    }
+			}
+
 			//if (LOWORD(wParam) == 1) ip->Play("demo.mp3");
 			return 0;
-			break;
+			break; }
 	case WM_DESTROY:
 			skinDestroyPaint(hWnd);
 			free (getWindowData(hWnd)); //free the data now that the window is gone.
@@ -704,7 +751,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 						     break;
 				   case WE_TIMER: {
 						      if (cur->bs == TIMER_BLANK) {
-						      skinDrawTimeString(hWnd, "     ", cur->x, cur->y);
+							  skinDrawTimeString(hWnd, "     ", cur->x, cur->y);
 						      } else {
 							  skinDrawTime(hWnd, ip->GetOutputTime()/1000, cur->x, cur->y);
 						      }
