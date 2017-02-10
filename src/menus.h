@@ -14,4 +14,9 @@
 #define IDM_I_ABOUT 1098
 #define IDM_I_EXIT 1099
 
+#define IDD_OPENLOC 901
+
+#define IDD_PROMPT 9011
+#define IDD_INPUT 9012
+
 #endif
