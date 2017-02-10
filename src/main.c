@@ -48,6 +48,8 @@ bool doubleMode = false;
 int timercnt = 0;
 int scrollcnt = 0;
 
+#define TIMER_BLANK INT_MIN
+
 enum window_types {
     WT_MAIN = 0,
     WT_EQUALIZER,
@@ -609,14 +611,14 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			if (op->IsPlaying()) {
 			    if ((timercnt % 5) == 0) scrollcnt++; 
 			    mw_elements[WE_TITLE].bs = 1 + scrollcnt;
-			    if (ip->IsPaused()) mw_elements[WE_PLAYPAUS].bs = PS_PAUSE;
-			    mw_elements[WE_TIMER].bs = (ip->GetOutputTime() / 1000);
+			    if (ip->IsPaused()) { mw_elements[WE_PLAYPAUS].bs = PS_PAUSE; }
+			    mw_elements[WE_TIMER].bs = (ip->IsPaused() && (timercnt % 20 >= 10)) ? TIMER_BLANK : (ip->GetOutputTime() / 1000);
 			} else {
 			    scrollcnt = 0;
 			    mw_elements[WE_TITLE].bs = 0;
 			    mw_elements[WE_MONOSTER].bs = 0; //remove both mono and stereo
 			    mw_elements[WE_PLAYPAUS].bs = PS_STOP;
-			    mw_elements[WE_TIMER].bs = INT_MIN;
+			    mw_elements[WE_TIMER].bs = TIMER_BLANK;
 			}
 
 			for (int i=0; i < WE_COUNT; i++) {
@@ -701,7 +703,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 						     }
 						     break;
 				   case WE_TIMER: {
-						      if (cur->bs == INT_MIN) {
+						      if (cur->bs == TIMER_BLANK) {
 						      skinDrawTimeString(hWnd, "     ", cur->x, cur->y);
 						      } else {
 							  skinDrawTime(hWnd, ip->GetOutputTime()/1000, cur->x, cur->y);
