@@ -13,7 +13,7 @@ endif
 CFLAGS=-std=c11 -I/usr/share/mingw-w64/include -Wall -Wno-unknown-pragmas
 LIBS=-lcomctl32 -lgdi32 -mwindows
 
-_OBJS = main.o wa_plugins.o win_misc.o menus.rc.o
+_OBJS = main.o plist.o wa_plugins.o win_misc.o menus.rc.o
 
 ifdef RELEASE
 DEFS += -xSSE3 -O3 -DNDEBUG
