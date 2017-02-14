@@ -367,6 +367,13 @@ enum element_avail {
     EA_ALWAYS = 3, //always
 };
 
+enum element_type {    
+    ET_LABEL = 0, //no interaction
+    ET_BUTTON = 1, // works as a click button
+    ET_HSLIDER = 2, //horizontal slider (position,volume,balance)
+    ET_VSLIDER = 3, //vertical slider (equalizer)
+};
+
 struct element {
 
     unsigned int x,y,w,h; //position
@@ -375,12 +382,13 @@ struct element {
     //is redrawn.
 
     enum element_avail avail; //when is the element available
-    int button; //specifies if the element should be treated as a button
+    enum element_type type;
+    //specifies if the element should be treated specially.
     //that means the window can't be dragged by this element,
-    //and that bs can be rewritten if the btton is held.
+    //and that bs can be rewritten if the element is held.
 
-    int value; //additional value. useful for elements where button==1 and
-    //therefore bs can't always hold the useful value.
+    int value; //additional value. useful for non-label elements, where
+    //bs can't always hold the useful value.
 };
 
 enum windowelements {
@@ -431,22 +439,22 @@ struct element mw_elements[WE_COUNT] = {
     {  .x = 156, .y = 43,.w = 10,   .h = 6},  //sample rate
     {  .x = 212, .y = 41,.w = 56,   .h = 12}, //mono/stereo
 
-    {  .x = 6,   .y = 3, .w = 9,  .h = 9,	.button=1}, //menu
-    {  .x = 244, .y = 3, .w = 9,  .h = 9,	.button=1}, //minimize
-    {  .x = 254, .y = 3, .w = 9,  .h = 9,	.button=1}, //windowshade
-    {  .x = 264, .y = 3, .w = 9,  .h = 9,	.button=1}, //close
-    {  .x = 11, .y = 22, .w = 10, .h = 43,	.button=1}, //OAIDV -- larger than the assoc. images
-    {  .x = 999, .y = 999, .w = 0, .h = 0,	.button=1}, //volume
-    {  .x = 999, .y = 999, .w = 0, .h = 0,	.button=1}, //balance
-    {  .x = 999, .y = 999, .w = 0, .h = 0,	.button=1}, //equalizer btn
-    {  .x = 999, .y = 999, .w = 0, .h = 0,	.button=1}, //playlist btn
-    {  .x = 16, .y = 72, .w = 248, .h = 10,	.button=1}, //scroll bar
-    {  .x = 16, .y = 88, .w = 23, .h = 18,	.button=1}, //prev
-    {  .x = 39, .y = 88, .w = 23, .h = 18,	.button=1}, //play
-    {  .x = 62, .y = 88, .w = 23, .h = 18,	.button=1}, //pause
-    {  .x = 85, .y = 88, .w = 23, .h = 18,	.button=1}, //stop
-    {  .x = 108, .y = 88, .w = 22, .h = 18,	.button=1}, //next
-    {  .x = 136, .y = 89, .w = 22, .h = 16,	.button=1}, //open
+    {  .x = 6,   .y = 3, .w = 9,  .h = 9,	.type=ET_BUTTON}, //menu
+    {  .x = 244, .y = 3, .w = 9,  .h = 9,	.type=ET_BUTTON}, //minimize
+    {  .x = 254, .y = 3, .w = 9,  .h = 9,	.type=ET_BUTTON}, //windowshade
+    {  .x = 264, .y = 3, .w = 9,  .h = 9,	.type=ET_BUTTON}, //close
+    {  .x = 11, .y = 22, .w = 10, .h = 43,	.type=ET_BUTTON}, //OAIDV -- larger than the assoc. images
+    {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_HSLIDER}, //volume
+    {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_HSLIDER}, //balance
+    {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_BUTTON}, //equalizer btn
+    {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_BUTTON}, //playlist btn
+    {  .x = 16, .y = 72, .w = 248, .h = 10,	.type=ET_HSLIDER}, //scroll bar
+    {  .x = 16, .y = 88, .w = 23, .h = 18,	.type=ET_BUTTON}, //prev
+    {  .x = 39, .y = 88, .w = 23, .h = 18,	.type=ET_BUTTON}, //play
+    {  .x = 62, .y = 88, .w = 23, .h = 18,	.type=ET_BUTTON}, //pause
+    {  .x = 85, .y = 88, .w = 23, .h = 18,	.type=ET_BUTTON}, //stop
+    {  .x = 108, .y = 88, .w = 22, .h = 18,	.type=ET_BUTTON}, //next
+    {  .x = 136, .y = 89, .w = 22, .h = 16,	.type=ET_BUTTON}, //open
 };
 
 void UI_SetInfo(int br, int sr, int st, int synch) {
@@ -474,9 +482,20 @@ int handleHoldEvents(HWND hWnd) {
 
     for (int i=0; i < WE_COUNT; i++) {
 	struct element* e = &mw_elements[i];
-	if (!e->button) continue; //only work on buttons
+	if (e->type == ET_LABEL) continue; //skip label elements
 	if (hover(e->x, e->y, e->w, e->h)) can_drag = 0;
-	e->bs = hold(e->x,e->y,e->w,e->h,1);
+
+	int newbs;
+
+	if (hold(e->x,e->y,e->w,e->h,1)) {
+	    switch(e->type) {
+		case ET_LABEL: newbs = 0; break;
+		case ET_BUTTON: newbs = 1; break;
+		case ET_HSLIDER: newbs = 1 + (mouseX - e->x); break; 
+		case ET_VSLIDER: newbs = 1 + (mouseY - e->y); break;
+	    }
+	} else newbs = 0;
+	e->bs = newbs;
 	if (e->bs != e->obs) invalidateXYWH(h_mainwin,e->x,e->y,e->w,e->h);
     }
     return 0;
@@ -485,7 +504,7 @@ int handleHoldEvents(HWND hWnd) {
 int get_click_button() {
     for (int i=0; i < WE_COUNT; i++) {
 	struct element* cb = &mw_elements[i];
-	if (!cb->button) continue; //only work on buttons
+	if (cb->type == ET_LABEL) continue; //skip label elements
 	if (click(cb->x,cb->y,cb->w,cb->h,1)) return i;
     }
     return -1;
@@ -526,44 +545,48 @@ int handleClickEvents(HWND hWnd) {
 
     switch (get_click_button()) {
 	case WE_B_MENU: {
-			  POINT mp = {.x = 6, .y = 12};
-			  MapWindowPoints(hWnd,NULL,&mp,1);
-			  HMENU h_sysmenu = GetSubMenu(h_mainmenu, 0);
-			  TrackPopupMenuEx(h_sysmenu,TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON,mp.x,mp.y,h_mainwin,NULL);
-			  break; }
+			    POINT mp = {.x = 6, .y = 12};
+			    MapWindowPoints(hWnd,NULL,&mp,1);
+			    HMENU h_sysmenu = GetSubMenu(h_mainmenu, 0);
+			    TrackPopupMenuEx(h_sysmenu,TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON,mp.x,mp.y,h_mainwin,NULL);
+			    break; }
 	case WE_B_CLOSE:
-		      ExitProcess(0);
-		      break;
+			ExitProcess(0);
+			break;
 	case WE_B_PAUSE:
-		      if (ip->IsPaused())
-			  ip->UnPause();
-		      else
-			  ip->Pause();
-		      break;
+			if (ip->IsPaused())
+			    ip->UnPause();
+			else
+			    ip->Pause();
+			break;
 	case WE_B_STOP:
-		      if (op->IsPlaying()) ip->Stop();
-		      break;
+			if (op->IsPlaying()) ip->Stop();
+			break;
 	case WE_B_OPEN: {
-			  OPENFILENAME ofn = {
-			      .lStructSize = sizeof ofn,
-			      .hwndOwner = h_mainwin,
-			      .hInstance = NULL,
-			      .lpstrFilter = "MP3 Files\0*.mp3\0\0",
-			      .lpstrCustomFilter = NULL,
-			      .nMaxCustFilter = 0,
-			      .nFilterIndex = 1,
-			      .lpstrFile = filePath,
-			      .nMaxFile = 1024,
-			  };
-			  BOOL r = GetOpenFileName(&ofn);
-			  if (!r) break;
-		      }
+			    OPENFILENAME ofn = {
+				.lStructSize = sizeof ofn,
+				.hwndOwner = h_mainwin,
+				.hInstance = NULL,
+				.lpstrFilter = "MP3 Files\0*.mp3\0\0",
+				.lpstrCustomFilter = NULL,
+				.nMaxCustFilter = 0,
+				.nFilterIndex = 1,
+				.lpstrFile = filePath,
+				.nMaxFile = 1024,
+			    };
+			    BOOL r = GetOpenFileName(&ofn);
+			    if (!r) break;
+			}
 	case WE_B_PLAY:
-		      if (op->IsPlaying()) ip->Stop();
-		      ip->Play(filePath);
-
-
-		      break;
+			if (op->IsPlaying()) ip->Stop();
+			ip->Play(filePath);
+			break;
+	case WE_B_SCROLLBAR: {
+			int len = ip->GetLength();
+			int px = (mw_elements[WE_B_SCROLLBAR].bs - 1) - (29/2);
+			if (px < 0) px=0; if (px >= 219) px = 218;
+			ip->SetOutputTime (len * (double)(px / 218.0));
+			break; }
     }
     return 0;
 }
@@ -583,7 +606,7 @@ int find_element_to_update(unsigned int element_c, struct element* element_v, st
 int GET_X_PARAM(LPARAM lParam) { return (int)(lParam & 0xFFFF); }
 int GET_Y_PARAM(LPARAM lParam) { return (int)(lParam >> 16); }
 #endif
-  
+
 INT_PTR CALLBACK URLDialogProc( HWND hWndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam ) {
     switch (uMsg) 
     { 
@@ -666,7 +689,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				 if (xpos < 0) xpos = 0;
 				 if (xpos >= 219) xpos = 219;
 				 mw_elements[WE_B_SCROLLBAR].value = xpos;
-				 mw_elements[WE_B_SCROLLBAR].bs = xpos;
+				 if (mw_elements[WE_B_SCROLLBAR].bs == 0) mw_elements[WE_B_SCROLLBAR].bs = xpos;
 			     } else mw_elements[WE_B_SCROLLBAR].value = -1;
 			 }
 
@@ -821,43 +844,53 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 							 break;
 						     }
 				   case WE_B_MENU:
-				       skinBlit(hWnd, skin.titlebitmap,0,i ? 9 : 0,6,3,9,9);
-				       break;
+						     skinBlit(hWnd, skin.titlebitmap,0,i ? 9 : 0,6,3,9,9);
+						     break;
 				   case WE_B_MINIMIZE:
-				       skinBlit(hWnd, skin.titlebitmap,9,i ? 9 : 0,244,3,9,9);
-				       break;
+						     skinBlit(hWnd, skin.titlebitmap,9,i ? 9 : 0,244,3,9,9);
+						     break;
 				   case WE_B_WINDOWSHADE:
-				       skinBlit(hWnd, skin.titlebitmap,i ? 9 : 0,18,254,3,9,9);
-				       break;
+						     skinBlit(hWnd, skin.titlebitmap,i ? 9 : 0,18,254,3,9,9);
+						     break;
 				   case WE_B_CLOSE:
-				       skinBlit(hWnd, skin.titlebitmap,18,i ? 9 : 0,264,3,9,9);
-				       break;
+						     skinBlit(hWnd, skin.titlebitmap,18,i ? 9 : 0,264,3,9,9);
+						     break;
 				   case WE_B_PREV:
-				       skinBlit(hWnd, skin.cbuttons, 0, i ? 18 : 0, 16,88,23,18);
-				       break;	
+						     skinBlit(hWnd, skin.cbuttons, 0, i ? 18 : 0, 16,88,23,18);
+						     break;	
 				   case WE_B_PLAY:
-				       skinBlit(hWnd, skin.cbuttons, 23, i ? 18 : 0, 16+23,88,23,18);
-				       break;	
+						     skinBlit(hWnd, skin.cbuttons, 23, i ? 18 : 0, 16+23,88,23,18);
+						     break;	
 				   case WE_B_PAUSE:
-				       skinBlit(hWnd, skin.cbuttons, 46, i ? 18 : 0, 16+46,88,23,18);
-				       break;	
+						     skinBlit(hWnd, skin.cbuttons, 46, i ? 18 : 0, 16+46,88,23,18);
+						     break;	
 				   case WE_B_STOP:
-				       skinBlit(hWnd, skin.cbuttons, 69, i ? 18 : 0, 16+69,88,23,18);
-				       break;	
+						     skinBlit(hWnd, skin.cbuttons, 69, i ? 18 : 0, 16+69,88,23,18);
+						     break;	
 				   case WE_B_NEXT:
-				       skinBlit(hWnd, skin.cbuttons, 92, i ? 18 : 0, 16+92,88,22,18);
-				       break;
+						     skinBlit(hWnd, skin.cbuttons, 92, i ? 18 : 0, 16+92,88,22,18);
+						     break;
 				   case WE_B_OPEN:
-				       skinBlit(hWnd, skin.cbuttons, 114, i ? 16 : 0, 136,89,22,16);
-				       break; 
+						     skinBlit(hWnd, skin.cbuttons, 114, i ? 16 : 0, 136,89,22,16);
+						     break; 
 				   case WE_B_SCROLLBAR:
-				       invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
-				       if (mw_elements[WE_B_SCROLLBAR].value >= 0) {
-					   skinBlit(hWnd, skin.posbar, 0, 0, 16, 72, 248, 10); 
-					   skinBlit(hWnd, skin.posbar, 248, 0, 16 + mw_elements[WE_B_SCROLLBAR].value, 72, 29, 10); 
-				       } else {
-					   skinBlit(hWnd, skin.mainbitmap, 16, 72, 16, 72, 248, 10); 
-				       }
+						     invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
+
+						     if (mw_elements[WE_B_SCROLLBAR].value >= 0) {
+							 skinBlit(hWnd, skin.posbar, 0, 0, cur->x, cur->y, 248, 10);
+
+							 if (cur->bs) {
+							     int px = cur->bs - 1 - (29/2);
+							     if (px < 0) px=0; if (px >= 219) px=218;
+							     skinBlit(hWnd, skin.posbar, 278, 0, cur->x + px, cur->y, 29, 10); 
+
+							 } else {
+							     skinBlit(hWnd, skin.posbar, 248, 0, cur->x + mw_elements[WE_B_SCROLLBAR].value, cur->y, 29, 10); 
+							 }
+
+						     } else {
+							 skinBlit(hWnd, skin.mainbitmap, cur->x, cur->y, cur->x, cur->y, 248, 10); 
+						     }
 			       }
 			   } while (cur);
 
