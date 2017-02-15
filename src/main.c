@@ -313,8 +313,6 @@ struct mouseData {
 
 short mouseClickX = -1;
 short mouseClickY = -1;
-short mouseReleaseX = -1;
-short mouseReleaseY = -1;
 short mouseX = -1;
 short mouseY = -1;
 short mouseButtons = 0;
@@ -344,12 +342,11 @@ int click(short x, short y, short w, short h, short bmask) {
 
     if ( (mouseClickX >= x) && (mouseClickX < (x+w)) &&
 	    (mouseClickY >= y) && (mouseClickY < (y+h)) &&
-	    (mouseReleaseX >= x) && (mouseReleaseX < (x+w)) &&
-	    (mouseReleaseY >= y) && (mouseReleaseY < (y+h)) && 
+	    (mouseX >= x) && (mouseX < (x+w)) &&
+	    (mouseY >= y) && (mouseY < (y+h)) && 
 	    (mouseButtons & bmask) ) {
 
 	mouseClickX = -1; mouseClickY = -1;
-	mouseReleaseX = -1; mouseReleaseY = -1;
 	return 1;
     }
     return 0;
@@ -541,6 +538,20 @@ int openFileAndPlay(void) {
     return filePlay();
 }
 
+int updateScrollbarValue(void) {
+    if (op->IsPlaying()) {
+	int len = ip->GetLength();
+	int cur = ip->GetOutputTime();
+
+	int xpos = (cur * 219) / len;
+	if (xpos < 0) xpos = 0;
+	if (xpos >= 219) xpos = 219;
+	mw_elements[WE_B_SCROLLBAR].value = xpos;
+	if (mw_elements[WE_B_SCROLLBAR].bs <= 0) mw_elements[WE_B_SCROLLBAR].bs = -1-xpos;
+    } else mw_elements[WE_B_SCROLLBAR].value = -1;
+    return 0;
+}
+
 int handleClickEvents(HWND hWnd) {
 
     switch (get_click_button()) {
@@ -582,11 +593,12 @@ int handleClickEvents(HWND hWnd) {
 			ip->Play(filePath);
 			break;
 	case WE_B_SCROLLBAR: {
-			int len = ip->GetLength();
-			int px = (mw_elements[WE_B_SCROLLBAR].bs - 1) - (29/2);
-			if (px < 0) px=0; if (px >= 219) px = 218;
-			ip->SetOutputTime (len * (double)(px / 218.0));
-			break; }
+				 int len = ip->GetLength();
+				 int px = (mw_elements[WE_B_SCROLLBAR].bs - 1) - (29/2);
+				 if (px < 0) px=0; if (px >= 219) px = 218;
+				 ip->SetOutputTime (len * (double)(px / 218.0));
+				updateScrollbarValue();
+				 break; }
     }
     return 0;
 }
@@ -626,6 +638,7 @@ INT_PTR CALLBACK URLDialogProc( HWND hWndDlg, UINT uMsg, WPARAM wParam, LPARAM l
     } 
     return FALSE;    
 }
+
 
 LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
@@ -680,17 +693,8 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	case WM_TIMER:
 			 timercnt++;	
 
-			 if ((timercnt % 10) == 0) { //scroll bar
-			     if (op->IsPlaying()) {
-				 int len = ip->GetLength();
-				 int cur = ip->GetOutputTime();
-
-				 int xpos = (cur * 219) / len;
-				 if (xpos < 0) xpos = 0;
-				 if (xpos >= 219) xpos = 219;
-				 mw_elements[WE_B_SCROLLBAR].value = xpos;
-				 if (mw_elements[WE_B_SCROLLBAR].bs == 0) mw_elements[WE_B_SCROLLBAR].bs = xpos;
-			     } else mw_elements[WE_B_SCROLLBAR].value = -1;
+			 if ((timercnt % 10) == 0) {
+			     updateScrollbarValue();
 			 }
 
 			 if (op->IsPlaying()) {
@@ -728,16 +732,16 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			   handleHoldEvents(hWnd);
 			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
 	case WM_LBUTTONUP:
-			   mouseReleaseX = LOWORD(lParam);
-			   mouseReleaseY = HIWORD(lParam);
+			   mouseX = LOWORD(lParam);
+			   mouseY = HIWORD(lParam);
 			   //handle all the "click" events here.
 			   handleClickEvents(hWnd);
 			   mouseButtons &= (~1);
 			   handleHoldEvents(hWnd); //release held buttons
 			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
 	case WM_LBUTTONDBLCLK:
-			   mouseReleaseX = LOWORD(lParam);
-			   mouseReleaseY = HIWORD(lParam);
+			   mouseX = LOWORD(lParam);
+			   mouseY = HIWORD(lParam);
 			   handleDoubleClickEvents(hWnd);
 			   mouseButtons &= (~1);
 			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
@@ -746,6 +750,12 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			   mouseY = HIWORD(lParam);
 			   handleHoldEvents(hWnd);
 			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
+	case WM_MOUSELEAVE:
+			   mouseX = -1;
+			   mouseY = -1;
+			   mouseClickX = -1;
+			   mouseClickY = -1;
+			   handleHoldEvents(hWnd);
 	case WM_PAINT: {
 
 
@@ -879,7 +889,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 						     if (mw_elements[WE_B_SCROLLBAR].value >= 0) {
 							 skinBlit(hWnd, skin.posbar, 0, 0, cur->x, cur->y, 248, 10);
 
-							 if (cur->bs) {
+							 if (cur->bs > 0) {
 							     int px = cur->bs - 1 - (29/2);
 							     if (px < 0) px=0; if (px >= 219) px=218;
 							     skinBlit(hWnd, skin.posbar, 278, 0, cur->x + px, cur->y, 29, 10); 
