@@ -369,6 +369,7 @@ enum element_type {
     ET_BUTTON = 1, // works as a click button
     ET_HSLIDER = 2, //horizontal slider (position,volume,balance)
     ET_VSLIDER = 3, //vertical slider (equalizer)
+    ET_MDBUTTON = 4, // like a button, but reacts on mousedown instead of click
 };
 
 struct element {
@@ -490,6 +491,7 @@ int handleHoldEvents(HWND hWnd) {
 		case ET_BUTTON: newbs = 1; break;
 		case ET_HSLIDER: newbs = 1 + (mouseX - e->x); break; 
 		case ET_VSLIDER: newbs = 1 + (mouseY - e->y); break;
+		case ET_MDBUTTON: newbs = 1; break;
 	    }
 	} else newbs = 0;
 	e->bs = newbs;
@@ -539,7 +541,8 @@ int openFileAndPlay(void) {
 }
 
 int updateScrollbarValue(void) {
-    if (op->IsPlaying()) {
+
+    if ((op) && (op->IsPlaying())) {
 	int len = ip->GetLength();
 	int cur = ip->GetOutputTime();
 
@@ -961,6 +964,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
     // force the initial draw of all elements.
     for (int i=0; i < WE_COUNT; i++ ) {
 	mw_elements[i].bs = 0; mw_elements[i].obs = -1;}
+    updateScrollbarValue();
 
     strcpy(filePath,"demo.mp3");
 
