@@ -1,31 +1,38 @@
+// vim: sts=4:sw=4
 #include <windows.h>
 #include "menus.h"
 
 IDI_APPICON ICON "program_icon.ico"
 
 IDM_MAINMENU MENU {
-	POPUP "System Menu"
-		BEGIN
-		MENUITEM "&About...", IDM_I_ABOUT
-		MENUITEM SEPARATOR
-		POPUP "&Open..."
-		BEGIN
-		MENUITEM "Open &File...", IDM_I_OPENFILE
-		MENUITEM "Open &Directory...", IDM_I_OPENLOC, GRAYED
-		MENUITEM "Open &URL...", IDM_I_OPENURL
-
-		END
-		MENUITEM SEPARATOR
-		MENUITEM "E&xit", IDM_I_EXIT
-		END
+    POPUP "System Menu"
+	BEGIN
+	MENUITEM "&About...", IDM_I_ABOUT
+	MENUITEM SEPARATOR
+	POPUP "&Play..."
+	{
+	    MENUITEM "&File...", IDM_I_OPENFILE
+		MENUITEM "&Directory...", IDM_I_OPENLOC, GRAYED
+		MENUITEM "&URL...", IDM_I_OPENURL
+	}
+    MENUITEM SEPARATOR
+	POPUP "&Options"
+	{
+	    MENUITEM "&Preferences", IDM_O_PREFS, GRAYED
+	    MENUITEM SEPARATOR
+	    MENUITEM "&Input Plugin Preferences...", IDM_O_INPUTPREF
+	    MENUITEM "&Output Plugin Preferences...", IDM_O_OUTPUTPREF
+	}
+    MENUITEM "E&xit", IDM_I_EXIT
+	END
 }
 
 IDD_OPENLOC DIALOGEX 10, 10, 120, 45
 STYLE WS_POPUP | WS_BORDER
 CAPTION "Open Location"
 {
-	CTEXT "Input the URL to open:", IDD_PROMPT, 5, 5, 110, 12
-		EDITTEXT IDD_INPUT,			5, 15, 110, 12
-		PUSHBUTTON "OK", IDOK,			25, 30, 40, 12
-		PUSHBUTTON "Cancel", IDCANCEL,		70, 30, 40, 12
+    CTEXT "Input the URL to open:", IDD_PROMPT, 5, 5, 110, 12
+	EDITTEXT IDD_INPUT,			5, 15, 110, 12
+	PUSHBUTTON "OK", IDOK,			25, 30, 40, 12
+	PUSHBUTTON "Cancel", IDCANCEL,		70, 30, 40, 12
 }

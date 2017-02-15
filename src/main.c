@@ -675,6 +675,12 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				     case IDM_I_ABOUT:
 					 MessageBoxA(hWnd, "amptest - https://github.com/usrshare/amptest/", "About amptest", MB_ICONINFORMATION);
 					 break;
+				    case IDM_O_INPUTPREF:
+					 ip->Config(hWnd);
+					 break;
+				    case IDM_O_OUTPUTPREF:
+					 op->Config(hWnd);
+					 break;
 				     case IDM_I_EXIT:
 					 ExitProcess(0);
 					 break;
