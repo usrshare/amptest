@@ -203,7 +203,11 @@ int skinDrawTimeString(HWND hWnd, const char* text, int x, int y) {
 int skinDrawTime(HWND hWnd, int time, int x, int y) {
 
     char text[6];
-    snprintf(text,6,"% 03d%02d\n", time / 60, abs(time) % 60);
+    if (time >= 0) {
+    snprintf(text,6,"% 03d%02d\n", time / 60, time % 60);
+    } else {
+    snprintf(text,6,"-%02d%02d\n", abs(time) / 60, abs(time) % 60);
+    }
     return skinDrawTimeString(hWnd,text,x,y);
 }
 
