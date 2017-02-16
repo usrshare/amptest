@@ -40,6 +40,7 @@ struct waInputPlugin* loadInputPlugin(const char* filename, struct waOutputPlugi
 	ip->dsp_dosamples = emptyfunc;
 	ip->SetInfo = emptyfunc;
 	ip->outMod = outputPlugin;
+
 	return ip;
 }
 

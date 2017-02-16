@@ -1,0 +1,293 @@
+// vim: cin:sts=4:sw=4
+#include <windows.h>
+#include <commctrl.h>
+#include "ui.h"
+
+#include "menus.h"
+
+HWND h_mainwin;
+
+HMENU h_mainmenu;
+
+struct uiWindow {
+    HWND v;
+};
+
+struct mouseData mouse = {.X = -1, .Y = -1, .clickX = -1, .clickY = -1, .buttons = 0};
+
+struct windowData {
+
+    //this struct is allocated for each instance of a window and pointed to with
+    //set/getWindowData(). any function that receives an hWnd can get the pointer
+    //to the structure.
+
+    HBITMAP hbmpBuf; // bitmap for double buffering
+    HDC hdcMemBuf; //hdcmem for dbl buffering
+
+    PAINTSTRUCT ps;
+    HDC hdc; //hdc for the window itself
+    HDC hdcMem; //hdcMem for the window itself
+    struct windowCallbacks cb;
+};
+
+struct windowData* getWindowData(HWND hWnd) {
+    return (struct windowData*) GetWindowLongPtr(hWnd,0);
+}
+
+int skinInitializePaint(HWND hWnd) {
+
+    HDC wndDC = GetDC(hWnd);
+    struct windowData* wdata = getWindowData(hWnd);
+    wdata->hdcMem = CreateCompatibleDC(wndDC);
+    wdata->hdcMemBuf = CreateCompatibleDC(wndDC);
+    wdata->hbmpBuf = CreateCompatibleBitmap(wndDC, 275, 116);
+    ReleaseDC(hWnd, wndDC);
+
+    return 0;
+}
+
+int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int h) {
+
+    //this function is used whenever part of a window has to be updated.
+    //it can be called at any moment.
+    //it updates the hbmpBuf bitmap.
+
+    struct windowData* wdata = getWindowData(hWnd);
+    BITMAP srcBuf; //source bitmap.
+    GetObject(src, sizeof srcBuf, &srcBuf);
+
+    HGDIOBJ oldSrcBuf = SelectObject(wdata->hdcMemBuf, src);
+    HGDIOBJ oldDstBuf = SelectObject(wdata->hdcMem, wdata->hbmpBuf);
+
+    BitBlt(wdata->hdcMem, xd, yd, w ? w : srcBuf.bmWidth, h ? h : srcBuf.bmHeight, wdata->hdcMemBuf, xs, ys, SRCCOPY);
+
+    SelectObject(wdata->hdcMem, oldDstBuf);
+    SelectObject(wdata->hdcMemBuf, oldSrcBuf);
+
+    return 0;
+}
+
+int windowBlit(HWND hWnd) {
+
+    //this function is only used at the end of the WM_PAINT message, and it
+    //redraws the entire window from the bitmap.
+
+    struct windowData* wdata = getWindowData(hWnd);
+    BITMAP wndBuf; // window bitmap
+    GetObject(wdata->hbmpBuf, sizeof wndBuf, &wndBuf);
+
+    wdata->hdc = BeginPaint(hWnd, &(wdata->ps));
+
+    HGDIOBJ oldBmp = SelectObject(wdata->hdcMem, wdata->hbmpBuf);
+    BitBlt(wdata->hdc, 0, 0, wndBuf.bmWidth, wndBuf.bmHeight, wdata->hdcMem, 0, 0, SRCCOPY); //entire bitmap
+    SelectObject(wdata->hdcMem,oldBmp);
+
+    EndPaint(hWnd, &(wdata->ps));
+    return 0;
+}
+
+int skinDestroyPaint(HWND hWnd) {
+
+    struct windowData* wdata = getWindowData(hWnd);
+    DeleteObject(wdata->hbmpBuf);
+    DeleteDC(wdata->hdcMemBuf);
+    wdata->hdcMemBuf = 0;
+    DeleteDC(wdata->hdcMem);
+    wdata->hdcMem = 0;
+    return 0;
+}
+
+int showSystemMenu(HWND hWnd, int submenu, int x, int y) {
+    POINT mp = {.x = x, .y = y};
+    MapWindowPoints(hWnd, NULL, &mp, 1);
+    HMENU h_sysmenu = GetSubMenu(h_mainmenu, submenu);
+    TrackPopupMenuEx(h_sysmenu,TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON,mp.x,mp.y,hWnd,NULL);
+    return 0;
+}
+
+#ifndef GET_X_PARAM
+int GET_X_PARAM(LPARAM lParam) { return (int)(lParam & 0xFFFF); }
+int GET_Y_PARAM(LPARAM lParam) { return (int)(lParam >> 16); }
+#endif
+
+LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+
+    struct windowData* wdata = getWindowData(hWnd);
+    switch(uMsg) {
+	case WM_SETFOCUS:
+	case WM_KILLFOCUS: {
+
+			       if (wdata->cb.focuscb) wdata->cb.focuscb(hWnd, uMsg == WM_SETFOCUS);
+
+			       return DefWindowProc(hWnd,uMsg,wParam,lParam); 
+			       break;} 
+	case WM_CREATE: {
+			    //create the struct and store it in the pointer provided.
+			    SetWindowLongPtr(hWnd,0,(LONG_PTR)(((LPCREATESTRUCT)lParam)->lpCreateParams) );
+			    skinInitializePaint(hWnd);
+			    return 0;
+			    break; }
+	case WM_COMMAND: {
+			     int menuid = LOWORD(wParam);
+			     if (HIWORD(wParam) == 0) {
+				 if (wdata->cb.menucb) wdata->cb.menucb(hWnd, menuid);
+			     }
+
+			     //if (LOWORD(wParam) == 1) ip->Play("demo.mp3");
+			     return 0;
+			     break; }
+	case WM_DESTROY:
+			 skinDestroyPaint(hWnd);
+			 free (getWindowData(hWnd)); //free the data now that the window is gone.
+			 PostQuitMessage(0);
+			 return 0;
+			 break;
+	case WM_TIMER:
+			 if (wdata->cb.timercb) wdata->cb.timercb(hWnd);
+
+			 break;
+	case WM_NCHITTEST: {
+			       POINT mp = {GET_X_PARAM(lParam),GET_Y_PARAM(lParam) };
+			       MapWindowPoints(NULL,hWnd,&mp,1);
+			       mouse.hWnd = hWnd;
+			       mouse.X = mp.x; mouse.Y = mp.y;
+			       int can_drag = 0;
+			       if (wdata->cb.holdcb) can_drag = wdata->cb.holdcb(hWnd);
+			       LRESULT r = DefWindowProc(hWnd,uMsg,wParam,lParam);
+			       if ((can_drag) && (r == HTCLIENT)) r = HTCAPTION;
+			       return r; } 
+	case WM_LBUTTONDOWN:
+			   //record press location for "pushed down" buttons.
+			   mouse.hWnd = hWnd;
+			   mouse.clickX = LOWORD(lParam);
+			   mouse.clickY = HIWORD(lParam);
+			   mouse.buttons |= 1;
+			   if (wdata->cb.holdcb) wdata->cb.holdcb(hWnd);
+			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
+	case WM_LBUTTONUP:
+			   mouse.hWnd = hWnd;
+			   mouse.X = LOWORD(lParam);
+			   mouse.Y = HIWORD(lParam);
+			   //handle all the "click" events here.
+			   if (wdata->cb.clickcb) wdata->cb.clickcb(hWnd);
+			   mouse.buttons &= (~1);
+			   if (wdata->cb.holdcb) wdata->cb.holdcb(hWnd);
+			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
+	case WM_LBUTTONDBLCLK:
+			   mouse.hWnd = hWnd;
+			   mouse.X = LOWORD(lParam);
+			   mouse.Y = HIWORD(lParam);
+			   if (wdata->cb.dblclickcb) wdata->cb.dblclickcb(hWnd);
+			   mouse.buttons &= (~1);
+			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
+	case WM_MOUSEMOVE:
+			   mouse.hWnd = hWnd;
+			   mouse.X = LOWORD(lParam);
+			   mouse.Y = HIWORD(lParam);
+			   if (wdata->cb.holdcb) wdata->cb.holdcb(hWnd);
+			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
+	case WM_MOUSELEAVE:
+			   mouse.X = -1;
+			   mouse.Y = -1;
+			   mouse.clickX = -1;
+			   mouse.clickY = -1;
+			   if (wdata->cb.holdcb) wdata->cb.holdcb(hWnd);
+	case WM_PAINT: {
+			   if (wdata->cb.paintcb) wdata->cb.paintcb(hWnd);
+			   break;
+		       }
+	default:
+		       return DefWindowProc(hWnd,uMsg,wParam,lParam);
+    }
+    return 0;
+}
+
+WNDCLASS mainwin = {0,(WNDPROC)WindowProc,0,sizeof (void*),NULL,NULL,NULL,(HBRUSH) COLOR_BTNFACE+1,NULL,"helloMain"};
+
+int initMainMenu (void) {
+    h_mainmenu = LoadMenu(mainwin.hInstance, MAKEINTRESOURCE(IDM_MAINMENU) );
+    return 0;
+}
+
+int initMainWindow (void) {
+
+    mainwin.hInstance = GetModuleHandle(0);
+    mainwin.hCursor = LoadCursor(0,IDC_ARROW);
+
+    RegisterClass(&mainwin);
+    InitCommonControls();
+
+    return 0;
+}
+
+int createMainWindow(struct windowCallbacks* wincb) {
+
+    struct windowData* wd = malloc(sizeof(struct windowData));
+    memset(wd, 0, sizeof *wd);
+    memcpy(&(wd->cb), wincb, sizeof (struct windowCallbacks));
+
+    h_mainwin = CreateWindowEx(0, "helloMain", "hello world", WS_VISIBLE | WS_POPUP, 128, 128, 275, 116, NULL, NULL, mainwin.hInstance, wd);
+
+    SetTimer(h_mainwin,0,50,NULL);
+    return 0; 
+}
+
+int windowLoop(void) {
+
+    //this is where WindowProc will start being called.
+
+    MSG lastmsg;
+    while (GetMessage(&lastmsg,NULL,0,0)) {
+	TranslateMessage(&lastmsg);
+	DispatchMessage(&lastmsg);
+    }
+    return 0;
+}
+
+
+UINT winMsgTypes[UIMB_COUNT] = { MB_ICONINFORMATION, MB_ICONWARNING, MB_ICONERROR };
+
+int uiOKMessageBox(HWND parenthWnd, const char* text, const char* title, int type) {
+
+    return MessageBoxA(parenthWnd, text, title, winMsgTypes[type]);
+}
+
+struct uiInputBoxParams {
+    const char* prompt;
+    char* rstring;
+    size_t rstrSz;
+};
+
+INT_PTR CALLBACK InputBoxProc( HWND hWndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam ) {
+    switch (uMsg) 
+    { 
+	case WM_INITDIALOG:
+	    SetWindowLongPtr(hWndDlg,GWLP_USERDATA,lParam);
+	    struct uiInputBoxParams* p = (void*) lParam;
+	    SetDlgItemText(hWndDlg, IDD_PROMPT, p->prompt);
+	    return TRUE;
+	case WM_COMMAND: 
+	    switch (LOWORD(wParam)) 
+	    { 
+		case IDOK: {
+
+		    struct uiInputBoxParams* p = (struct uiInputBoxParams*) GetWindowLongPtr(hWndDlg,GWLP_USERDATA);
+		    if (!GetDlgItemText(hWndDlg, IDD_INPUT, p->rstring, p->rstrSz)) 
+			p->rstring[0]=0; //if failed to receive filePath, set it to empty string
+		    // Fall through. 
+			   }
+		case IDCANCEL: 
+		    EndDialog(hWndDlg, wParam); 
+		    return TRUE; 
+	    } 
+    } 
+    return FALSE;    
+}
+
+int uiInputBox(HWND hWnd, const char* prompt, char* rstring, size_t rstrSz) {
+
+    struct uiInputBoxParams p = {.prompt = prompt, .rstring = rstring, .rstrSz = rstrSz};
+
+    DialogBoxParam(NULL, MAKEINTRESOURCE(IDD_INPUTBOX), hWnd, InputBoxProc, (LPARAM)&p);
+    return 0;
+}

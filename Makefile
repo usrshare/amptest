@@ -10,10 +10,10 @@ WINDRES=$(PREFIX)windres
 else
 WINDRES=windres
 endif
-CFLAGS=-std=c11 -I/usr/share/mingw-w64/include -Wall -Wno-unknown-pragmas
+CFLAGS=-std=c11 -I/usr/share/mingw-w64/include -Wall -Wno-unknown-pragmas -fdiagnostics-show-option
 LIBS=-lcomctl32 -lgdi32 -mwindows
 
-_OBJS = main.o plist.o wa_plugins.o win_misc.o menus.rc.o
+_OBJS = main.o plist.o wa_plugins.o ui.o win_misc.o menus.rc.o
 
 ifdef RELEASE
 DEFS += -xSSE3 -O3 -DNDEBUG

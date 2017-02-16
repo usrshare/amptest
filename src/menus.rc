@@ -27,12 +27,12 @@ IDM_MAINMENU MENU {
 	END
 }
 
-IDD_OPENLOC DIALOGEX 10, 10, 180, 65
+IDD_INPUTBOX DIALOGEX 10, 10, 180, 65
 STYLE WS_POPUP | WS_BORDER
 CAPTION "Open Location"
 FONT 8, "MS Shell Dlg"
 {
-    LTEXT "Input the URL of the resource to be played:", IDD_PROMPT, 10, 10, 160, 12
+    LTEXT "(insert dialog box text here)", IDD_PROMPT, 10, 10, 160, 12
 	EDITTEXT IDD_INPUT,			10, 25, 160, 12
 	PUSHBUTTON "OK", IDOK,			10, 45, 40, 12
 	PUSHBUTTON "Cancel", IDCANCEL,		60, 45, 40, 12

@@ -1,12 +1,11 @@
 // vim: cin:sts=4:sw=4
-#include <windows.h>
-#include <commctrl.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <locale.h>
 
-#include "menus.h"
 #include "wa_plugins.h"
+#include "ui.h"
+#include "menus.h"
 #include "win_misc.h"
 
 char* default_text_layout = 
@@ -39,106 +38,12 @@ struct playbackData {
     int synched;
 } pb;
 
-HWND h_mainwin;
-
-HMENU h_mainmenu;
-
 bool doubleMode = false;
 
 int timercnt = 0;
 int scrollcnt = 0;
 
 #define TIMER_BLANK INT_MIN
-
-enum window_types {
-    WT_MAIN = 0,
-    WT_EQUALIZER,
-    WT_PLAYLIST
-};
-
-struct windowData {
-
-    //this struct is allocated for each instance of a window and pointed to with
-    //set/getWindowData(). any function that receives an hWnd can get the pointer
-    //to the structure.
-
-    enum window_types type; //useful for determining which elements this window controls
-    HBITMAP hbmpBuf; // bitmap for double buffering
-    HDC hdcMemBuf; //hdcmem for dbl buffering
-
-    PAINTSTRUCT ps;
-    HDC hdc; //hdc for the window itself
-    HDC hdcMem; //hdcMem for the window itself
-};
-
-struct windowData* getWindowData(HWND hWnd) {
-    return (struct windowData*) GetWindowLongPtr(hWnd,0);
-}
-
-int skinInitializePaint(HWND hWnd) {
-
-    HDC wndDC = GetDC(hWnd);
-    struct windowData* wdata = getWindowData(hWnd);
-    wdata->hdcMem = CreateCompatibleDC(wndDC);
-    wdata->hdcMemBuf = CreateCompatibleDC(wndDC);
-    wdata->hbmpBuf = CreateCompatibleBitmap(wndDC, 275, 116);
-    ReleaseDC(hWnd, wndDC);
-
-    return 0;
-}
-
-int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int h) {
-
-    //this function is used whenever part of a window has to be updated.
-    //it can be called at any moment.
-    //it updates the hbmpBuf bitmap.
-
-    struct windowData* wdata = getWindowData(hWnd);
-    BITMAP srcBuf; //source bitmap.
-    GetObject(src, sizeof srcBuf, &srcBuf);
-
-    HGDIOBJ oldSrcBuf = SelectObject(wdata->hdcMemBuf, src);
-    HGDIOBJ oldDstBuf = SelectObject(wdata->hdcMem, wdata->hbmpBuf);
-
-    BitBlt(wdata->hdcMem, xd, yd, w ? w : srcBuf.bmWidth, h ? h : srcBuf.bmHeight, wdata->hdcMemBuf, xs, ys, SRCCOPY);
-
-    SelectObject(wdata->hdcMem, oldDstBuf);
-    SelectObject(wdata->hdcMemBuf, oldSrcBuf);
-
-    return 0;
-}
-
-int windowBlit(HWND hWnd) {
-
-    //this function is only used at the end of the WM_PAINT message, and it
-    //redraws the entire window from the bitmap.
-
-    struct windowData* wdata = getWindowData(hWnd);
-    BITMAP wndBuf; // window bitmap
-    GetObject(wdata->hbmpBuf, sizeof wndBuf, &wndBuf);
-
-    wdata->hdc = BeginPaint(hWnd, &(wdata->ps));
-
-    HGDIOBJ oldBmp = SelectObject(wdata->hdcMem, wdata->hbmpBuf);
-    BitBlt(wdata->hdc, 0, 0, wndBuf.bmWidth, wndBuf.bmHeight, wdata->hdcMem, 0, 0, SRCCOPY); //entire bitmap
-    SelectObject(wdata->hdcMem,oldBmp);
-
-    EndPaint(hWnd, &(wdata->ps));
-    return 0;
-}
-
-int skinDestroyPaint(HWND hWnd) {
-
-    struct windowData* wdata = getWindowData(hWnd);
-    DeleteObject(wdata->hbmpBuf);
-    DeleteDC(wdata->hdcMemBuf);
-    wdata->hdcMemBuf = 0;
-    DeleteDC(wdata->hdcMem);
-    wdata->hdcMem = 0;
-    return 0;
-}
-
-
 
 int iterate_utf8_codepoint(const char* cur, unsigned int* u_val) {
 
@@ -301,37 +206,19 @@ int skinDrawTime(HWND hWnd, int time, int x, int y) {
 
 CONST RECT mainTitleRect = {.left = 0, .top = 0, .right = 275, .bottom = 14};
 
-struct mouseData {
-    short clickX;
-    short clickY;
-    short releaseX;
-    short releaseY;
-    short x;
-    short y;
-    short buttons;
-};
-
-short mouseClickX = -1;
-short mouseClickY = -1;
-short mouseX = -1;
-short mouseY = -1;
-short mouseButtons = 0;
-
-unsigned char can_drag = 0;
-
 int hover(short x, short y, short w, short h) {
 
-    if ((mouseX >= x) && (mouseX < (x+w)) &&
-	    (mouseY >= y) && (mouseY < (y+h))) return 1; else return 0;
+    if ((mouse.X >= x) && (mouse.X < (x+w)) &&
+	    (mouse.Y >= y) && (mouse.Y < (y+h))) return 1; else return 0;
 }
 
 int hold(short x, short y, short w, short h, short bmask) {
 
-    if ( (mouseClickX >= x) && (mouseClickX < (x+w)) &&
-	    (mouseClickY >= y) && (mouseClickY < (y+h)) &&
-	    (mouseX >= x) && (mouseX < (x+w)) &&
-	    (mouseY >= y) && (mouseY < (y+h)) &&
-	    (mouseButtons & bmask)) {
+    if ( (mouse.clickX >= x) && (mouse.clickX < (x+w)) &&
+	    (mouse.clickY >= y) && (mouse.clickY < (y+h)) &&
+	    (mouse.X >= x) && (mouse.X < (x+w)) &&
+	    (mouse.Y >= y) && (mouse.Y < (y+h)) &&
+	    (mouse.buttons & bmask)) {
 
 	return 1;
     }
@@ -340,13 +227,13 @@ int hold(short x, short y, short w, short h, short bmask) {
 
 int click(short x, short y, short w, short h, short bmask) {
 
-    if ( (mouseClickX >= x) && (mouseClickX < (x+w)) &&
-	    (mouseClickY >= y) && (mouseClickY < (y+h)) &&
-	    (mouseX >= x) && (mouseX < (x+w)) &&
-	    (mouseY >= y) && (mouseY < (y+h)) && 
-	    (mouseButtons & bmask) ) {
+    if ( (mouse.clickX >= x) && (mouse.clickX < (x+w)) &&
+	    (mouse.clickY >= y) && (mouse.clickY < (y+h)) &&
+	    (mouse.X >= x) && (mouse.X < (x+w)) &&
+	    (mouse.Y >= y) && (mouse.Y < (y+h)) && 
+	    (mouse.buttons & bmask) ) {
 
-	mouseClickX = -1; mouseClickY = -1;
+	mouse.clickX = -1; mouse.clickY = -1;
 	return 1;
     }
     return 0;
@@ -372,6 +259,17 @@ enum element_type {
     ET_MDBUTTON = 4, // like a button, but reacts on mousedown instead of click
 };
 
+enum element_events {
+    EE_CLICK,
+    EE_HOLD,
+    EE_DBLCLICK,
+};
+
+struct element;
+
+typedef void (*elementcb)(struct element* el, enum element_events ev);
+
+
 struct element {
 
     unsigned int x,y,w,h; //position
@@ -387,6 +285,10 @@ struct element {
 
     int value; //additional value. useful for non-label elements, where
     //bs can't always hold the useful value.
+
+    elementcb drag_cb;
+    elementcb click_cb;
+    elementcb dblclick_cb;
 };
 
 enum windowelements {
@@ -476,7 +378,7 @@ void UI_SetInfo(int br, int sr, int st, int synch) {
 
 int handleHoldEvents(HWND hWnd) {
 
-    can_drag = 1;
+    int can_drag = 1;
 
     for (int i=0; i < WE_COUNT; i++) {
 	struct element* e = &mw_elements[i];
@@ -489,30 +391,28 @@ int handleHoldEvents(HWND hWnd) {
 	    switch(e->type) {
 		case ET_LABEL: newbs = 0; break;
 		case ET_BUTTON: newbs = 1; break;
-		case ET_HSLIDER: newbs = 1 + (mouseX - e->x); break; 
-		case ET_VSLIDER: newbs = 1 + (mouseY - e->y); break;
+		case ET_HSLIDER: newbs = 1 + (mouse.X - e->x); break; 
+		case ET_VSLIDER: newbs = 1 + (mouse.Y - e->y); break;
 		case ET_MDBUTTON: newbs = 1; break;
 	    }
 	} else newbs = 0;
 	e->bs = newbs;
-	if (e->bs != e->obs) invalidateXYWH(h_mainwin,e->x,e->y,e->w,e->h);
+	if (e->bs != e->obs) invalidateXYWH(hWnd,e->x,e->y,e->w,e->h);
     }
-    return 0;
+    return can_drag;
 }
 
 int get_click_button() {
     for (int i=0; i < WE_COUNT; i++) {
-	struct element* cb = &mw_elements[i];
-	if (cb->type == ET_LABEL) continue; //skip label elements
-	if (click(cb->x,cb->y,cb->w,cb->h,1)) return i;
+	struct element* e = &mw_elements[i];
+	if (e->type == ET_LABEL) continue; //skip label elements
+	if (click(e->x,e->y,e->w,e->h,1)) return i;
     }
     return -1;
 }
 
 int handleDoubleClickEvents(HWND hWnd) {
 
-    switch (get_click_button()) {
-    }
     return 0;
 }
 
@@ -522,8 +422,7 @@ int filePlay(void) {
     return 0;
 }
 
-int openFileAndPlay(void) {
-
+int openFile(void) {
     OPENFILENAME ofn = {
 	.lStructSize = sizeof ofn,
 	.hwndOwner = h_mainwin,
@@ -535,8 +434,13 @@ int openFileAndPlay(void) {
 	.lpstrFile = filePath,
 	.nMaxFile = 1024,
     };
-    BOOL r = GetOpenFileName(&ofn);
-    if (!r) return 1;
+    int r = GetOpenFileName(&ofn);
+    return r;
+}
+
+int openFileAndPlay(void) {
+
+    if (openFile() == 0) return 1;
     return filePlay();
 }
 
@@ -558,12 +462,8 @@ int updateScrollbarValue(void) {
 int handleClickEvents(HWND hWnd) {
 
     switch (get_click_button()) {
-	case WE_B_MENU: {
-			    POINT mp = {.x = 6, .y = 12};
-			    MapWindowPoints(hWnd,NULL,&mp,1);
-			    HMENU h_sysmenu = GetSubMenu(h_mainmenu, 0);
-			    TrackPopupMenuEx(h_sysmenu,TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON,mp.x,mp.y,h_mainwin,NULL);
-			    break; }
+	case WE_B_MENU: showSystemMenu(hWnd, 0, 6, 12);
+			break;
 	case WE_B_CLOSE:
 			ExitProcess(0);
 			break;
@@ -576,31 +476,17 @@ int handleClickEvents(HWND hWnd) {
 	case WE_B_STOP:
 			if (op->IsPlaying()) ip->Stop();
 			break;
-	case WE_B_OPEN: {
-			    OPENFILENAME ofn = {
-				.lStructSize = sizeof ofn,
-				.hwndOwner = h_mainwin,
-				.hInstance = NULL,
-				.lpstrFilter = "MP3 Files\0*.mp3\0\0",
-				.lpstrCustomFilter = NULL,
-				.nMaxCustFilter = 0,
-				.nFilterIndex = 1,
-				.lpstrFile = filePath,
-				.nMaxFile = 1024,
-			    };
-			    BOOL r = GetOpenFileName(&ofn);
-			    if (!r) break;
-			}
+	case WE_B_OPEN: 
+			if (!openFile()) break;
 	case WE_B_PLAY:
-			if (op->IsPlaying()) ip->Stop();
-			ip->Play(filePath);
+			filePlay();
 			break;
 	case WE_B_SCROLLBAR: {
 				 int len = ip->GetLength();
 				 int px = (mw_elements[WE_B_SCROLLBAR].bs - 1) - (29/2);
 				 if (px < 0) px=0; if (px >= 219) px = 218;
 				 ip->SetOutputTime (len * (double)(px / 218.0));
-				updateScrollbarValue();
+				 updateScrollbarValue();
 				 break; }
     }
     return 0;
@@ -617,312 +503,215 @@ int find_element_to_update(unsigned int element_c, struct element* element_v, st
 
 }
 
-#ifndef GET_X_PARAM
-int GET_X_PARAM(LPARAM lParam) { return (int)(lParam & 0xFFFF); }
-int GET_Y_PARAM(LPARAM lParam) { return (int)(lParam >> 16); }
-#endif
+void mainWinTimerFunc(HWND hWnd) {
+    timercnt++;	
 
-INT_PTR CALLBACK URLDialogProc( HWND hWndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam ) {
-    switch (uMsg) 
-    { 
-	case WM_INITDIALOG:
-	    return true;
-	case WM_COMMAND: 
-	    switch (LOWORD(wParam)) 
-	    { 
-		case IDOK: 
-		    if (!GetDlgItemText(hWndDlg, IDD_INPUT, filePath, 1024)) 
-			filePath[0]=0; //if failed to receive filePath, set it to empty string
-		    // Fall through. 
-		case IDCANCEL: 
-		    EndDialog(hWndDlg, wParam); 
-		    return TRUE; 
-	    } 
-    } 
-    return FALSE;    
-}
-
-
-LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-
-    switch(uMsg) {
-	case WM_SETFOCUS:
-	case WM_KILLFOCUS:
-	    mw_elements[WE_TITLEBAR].bs = (uMsg == WM_SETFOCUS);
-	    if (mw_elements[WE_TITLEBAR].bs != mw_elements[WE_TITLEBAR].obs) InvalidateRect(hWnd,&mainTitleRect,0);
-	    return DefWindowProc(hWnd,uMsg,wParam,lParam);
-	    break;
-	case WM_CREATE: {
-			    //create the struct and store it in the pointer provided.
-			    struct windowData* wd = malloc(sizeof(struct windowData));
-			    memset(wd, 0, sizeof *wd);
-			    SetWindowLongPtr(hWnd,0,(LONG_PTR)wd);
-			    skinInitializePaint(hWnd);
-			    return 0;
-			    break; }
-	case WM_COMMAND: {
-			     int menuid = LOWORD(wParam);
-			     if (HIWORD(wParam) == 0) {
-				 switch (menuid) {
-				     case IDM_I_OPENFILE:
-					 return openFileAndPlay();
-					 break;
-				     case IDM_I_OPENLOC:
-					 break;
-				     case IDM_I_OPENURL:
-					 DialogBox(NULL,MAKEINTRESOURCE(IDD_OPENLOC),hWnd,URLDialogProc);
-					 break;
-				     case IDM_I_FILEINFO:
-					 ip->InfoBox(filePath, hWnd);
-					 break;
-				     case IDM_I_ABOUT:
-					 MessageBoxA(hWnd, "amptest - https://github.com/usrshare/amptest/", "About amptest", MB_ICONINFORMATION);
-					 break;
-				    case IDM_O_INPUTPREF:
-					 ip->Config(hWnd);
-					 break;
-				    case IDM_O_OUTPUTPREF:
-					 op->Config(hWnd);
-					 break;
-				     case IDM_I_EXIT:
-					 ExitProcess(0);
-					 break;
-				 }
-			     }
-
-			     //if (LOWORD(wParam) == 1) ip->Play("demo.mp3");
-			     return 0;
-			     break; }
-	case WM_DESTROY:
-			 skinDestroyPaint(hWnd);
-			 free (getWindowData(hWnd)); //free the data now that the window is gone.
-			 PostQuitMessage(0);
-			 return 0;
-			 break;
-	case WM_TIMER:
-			 timercnt++;	
-
-			 if ((timercnt % 10) == 0) {
-			     updateScrollbarValue();
-			 }
-
-			 if (op->IsPlaying()) {
-			     if ((timercnt % 5) == 0) scrollcnt++; 
-			     mw_elements[WE_TITLE].bs = 1 + scrollcnt;
-			     if (ip->IsPaused()) { mw_elements[WE_PLAYPAUS].bs = PS_PAUSE; }
-			     mw_elements[WE_TIMER].bs = (ip->IsPaused() && (timercnt % 20 >= 10)) ? TIMER_BLANK : (ip->GetOutputTime() / 1000);
-			 } else {
-			     scrollcnt = 0;
-			     mw_elements[WE_TITLE].bs = 0;
-			     mw_elements[WE_MONOSTER].bs = 0; //remove both mono and stereo
-			     mw_elements[WE_PLAYPAUS].bs = PS_STOP;
-			     mw_elements[WE_TIMER].bs = TIMER_BLANK;
-			 }
-
-			 for (int i=0; i < WE_COUNT; i++) {
-			     struct element* e = &mw_elements[i];
-			     if (e->bs != e->obs) invalidateXYWH(h_mainwin,e->x,e->y,e->w,e->h);
-			 }
-
-			 break;
-	case WM_NCHITTEST: {
-			       POINT mp = {GET_X_PARAM(lParam),GET_Y_PARAM(lParam) };
-			       MapWindowPoints(NULL,hWnd,&mp,1);
-			       mouseX = mp.x; mouseY = mp.y;
-			       handleHoldEvents(hWnd);
-			       LRESULT r = DefWindowProc(hWnd,uMsg,wParam,lParam);
-			       if ((can_drag) && (r == HTCLIENT)) r = HTCAPTION;
-			       return r; } 
-	case WM_LBUTTONDOWN:
-			   //record press location for "pushed down" buttons.
-			   mouseClickX = LOWORD(lParam);
-			   mouseClickY = HIWORD(lParam);
-			   mouseButtons |= 1;
-			   handleHoldEvents(hWnd);
-			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
-	case WM_LBUTTONUP:
-			   mouseX = LOWORD(lParam);
-			   mouseY = HIWORD(lParam);
-			   //handle all the "click" events here.
-			   handleClickEvents(hWnd);
-			   mouseButtons &= (~1);
-			   handleHoldEvents(hWnd); //release held buttons
-			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
-	case WM_LBUTTONDBLCLK:
-			   mouseX = LOWORD(lParam);
-			   mouseY = HIWORD(lParam);
-			   handleDoubleClickEvents(hWnd);
-			   mouseButtons &= (~1);
-			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
-	case WM_MOUSEMOVE:
-			   mouseX = LOWORD(lParam);
-			   mouseY = HIWORD(lParam);
-			   handleHoldEvents(hWnd);
-			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
-	case WM_MOUSELEAVE:
-			   mouseX = -1;
-			   mouseY = -1;
-			   mouseClickX = -1;
-			   mouseClickY = -1;
-			   handleHoldEvents(hWnd);
-	case WM_PAINT: {
-
-
-			   int i=0;
-			   struct element* cur = &mw_elements[0];
-			   do {
-			       i = find_element_to_update(WE_COUNT,mw_elements,&cur);
-
-			       switch (cur - mw_elements) {
-				   case WE_BACKGROUND:
-				       skinBlit(hWnd, skin.mainbitmap, 0, 0, 0, 0, 0, 0);
-				       break;
-				   case WE_TITLEBAR:
-				       if (GetForegroundWindow() == hWnd) {
-					   skinBlit(hWnd, skin.titlebitmap, 27, 0, 0, 0, 275, 14);
-				       } else {
-					   skinBlit(hWnd, skin.titlebitmap, 27, 15, 0, 0, 275, 14);
-				       }
-				       break;
-				   case WE_PLAYPAUS: {
-							 switch(cur->bs) {
-							     case PS_STOP:
-								 skinBlit(hWnd, skin.mainbitmap, cur->x, cur->y, cur->x, cur->y, 2, 9);
-								 skinBlit(hWnd, skin.playpaus, 18, 0, cur->x + 2, cur->y,9, 9);
-								 break;
-							     case PS_PAUSE:
-								 skinBlit(hWnd, skin.mainbitmap, cur->x, cur->y, cur->x, cur->y, 2, 9);
-								 skinBlit(hWnd, skin.playpaus, 9, 0, cur->x + 2, cur->y, 9, 9);
-								 break;
-							     case PS_PLAY_NOSYNCH:
-								 skinBlit(hWnd, skin.playpaus, 1, 0, cur->x + 3, cur->y, 8, 9);
-								 skinBlit(hWnd, skin.playpaus, 39, 0, cur->x, cur->y, 3, 9);
-								 break;
-							     case PS_PLAY_SYNCH:
-								 skinBlit(hWnd, skin.playpaus, 1, 0, cur->x + 3, cur->y, 8, 9);
-								 skinBlit(hWnd, skin.playpaus, 36, 0, cur->x, cur->y, 3, 9);
-								 break;
-							 }
-
-						     }
-						     break;
-				   case WE_TIMER: {
-						      if (cur->bs == TIMER_BLANK) {
-							  skinDrawTimeString(hWnd, "     ", cur->x, cur->y);
-						      } else {
-							  skinDrawTime(hWnd, ip->GetOutputTime()/1000, cur->x, cur->y);
-						      }
-						      break; }
-				   case WE_TITLE: {
-
-						      char title[128];
-
-						      sprintf(title,"hello world");
-						      int titlesz = skinTextLength(title);
-
-						      if (op->IsPlaying()) {
-
-							  int lms = 0;
-							  char f_title[GETFILEINFO_TITLE_LENGTH];
-							  ip->GetFileInfo(NULL,f_title,&lms);
-
-							  snprintf(title,128,"%.112s (%d:%02d)",f_title, lms / (60 * 1000), abs((lms / 1000) % 60));
-							  titlesz = skinTextLength(title);
-							  if (titlesz > cur->w) { strcat(title, " *** "); titlesz = skinTextLength(title); }
-						      }
-
-						      while (scrollcnt >= skinTextLengthC(title)) scrollcnt = 0;
-
-						      if (titlesz <= (cur->w)) {
-							  skinDrawText(h_mainwin,title,cur->x,cur->y,cur->w,0);
-						      } else {
-							  skinDrawText(h_mainwin,title,cur->x,cur->y,cur->w,scrollcnt % titlesz);
-							  skinDrawText(h_mainwin,title,cur->x + titlesz - ((5*scrollcnt) % titlesz),cur->y,cur->w - (titlesz - ((5*scrollcnt) % titlesz)),0);
-						      }
-						  }
-						  break;
-				   case WE_BITRATE: {
-							invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
-							char bitrate[4];
-							snprintf(bitrate,4,"%3d",pb.bitrate);
-							skinDrawText(h_mainwin,bitrate,cur->x,cur->y,cur->w,0);
-							break;
-						    }
-				   case WE_MIXRATE: {
-							invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
-							char samplerate[3];
-							snprintf(samplerate,3,"%2d",pb.samplerate);
-							skinDrawText(h_mainwin,samplerate,cur->x,cur->y,cur->w,0);
-							break;
-						    }
-				   case WE_MONOSTER: {
-							 invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
-
-							 skinBlit(hWnd, skin.monoster, 29, (pb.channels == 1) ? 0 : 12, cur->x, cur->y, 27, 12);
-							 skinBlit(hWnd, skin.monoster, 0, (pb.channels >= 2) ? 0 : 12, cur->x + 27, cur->y, 29, 12);
-							 break;
-						     }
-				   case WE_B_MENU:
-						     skinBlit(hWnd, skin.titlebitmap,0,i ? 9 : 0,6,3,9,9);
-						     break;
-				   case WE_B_MINIMIZE:
-						     skinBlit(hWnd, skin.titlebitmap,9,i ? 9 : 0,244,3,9,9);
-						     break;
-				   case WE_B_WINDOWSHADE:
-						     skinBlit(hWnd, skin.titlebitmap,i ? 9 : 0,18,254,3,9,9);
-						     break;
-				   case WE_B_CLOSE:
-						     skinBlit(hWnd, skin.titlebitmap,18,i ? 9 : 0,264,3,9,9);
-						     break;
-				   case WE_B_PREV:
-						     skinBlit(hWnd, skin.cbuttons, 0, i ? 18 : 0, 16,88,23,18);
-						     break;	
-				   case WE_B_PLAY:
-						     skinBlit(hWnd, skin.cbuttons, 23, i ? 18 : 0, 16+23,88,23,18);
-						     break;	
-				   case WE_B_PAUSE:
-						     skinBlit(hWnd, skin.cbuttons, 46, i ? 18 : 0, 16+46,88,23,18);
-						     break;	
-				   case WE_B_STOP:
-						     skinBlit(hWnd, skin.cbuttons, 69, i ? 18 : 0, 16+69,88,23,18);
-						     break;	
-				   case WE_B_NEXT:
-						     skinBlit(hWnd, skin.cbuttons, 92, i ? 18 : 0, 16+92,88,22,18);
-						     break;
-				   case WE_B_OPEN:
-						     skinBlit(hWnd, skin.cbuttons, 114, i ? 16 : 0, 136,89,22,16);
-						     break; 
-				   case WE_B_SCROLLBAR:
-						     invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
-
-						     if (mw_elements[WE_B_SCROLLBAR].value >= 0) {
-							 skinBlit(hWnd, skin.posbar, 0, 0, cur->x, cur->y, 248, 10);
-
-							 if (cur->bs > 0) {
-							     int px = cur->bs - 1 - (29/2);
-							     if (px < 0) px=0; if (px >= 219) px=218;
-							     skinBlit(hWnd, skin.posbar, 278, 0, cur->x + px, cur->y, 29, 10); 
-
-							 } else {
-							     skinBlit(hWnd, skin.posbar, 248, 0, cur->x + mw_elements[WE_B_SCROLLBAR].value, cur->y, 29, 10); 
-							 }
-
-						     } else {
-							 skinBlit(hWnd, skin.mainbitmap, cur->x, cur->y, cur->x, cur->y, 248, 10); 
-						     }
-			       }
-			   } while (cur);
-
-			   windowBlit(hWnd);
-			   break;
-		       }
-	default:
-		       return DefWindowProc(hWnd,uMsg,wParam,lParam);
+    if ((timercnt % 10) == 0) {
+	updateScrollbarValue();
     }
-    return 0;
+
+    if (op->IsPlaying()) {
+	if ((timercnt % 5) == 0) scrollcnt++; 
+	mw_elements[WE_TITLE].bs = 1 + scrollcnt;
+	if (ip->IsPaused()) { mw_elements[WE_PLAYPAUS].bs = PS_PAUSE; }
+	mw_elements[WE_TIMER].bs = (ip->IsPaused() && (timercnt % 20 >= 10)) ? TIMER_BLANK : (ip->GetOutputTime() / 1000);
+    } else {
+	scrollcnt = 0;
+	mw_elements[WE_TITLE].bs = 0;
+	mw_elements[WE_MONOSTER].bs = 0; //remove both mono and stereo
+	mw_elements[WE_PLAYPAUS].bs = PS_STOP;
+	mw_elements[WE_TIMER].bs = TIMER_BLANK;
+    }
+
+    for (int i=0; i < WE_COUNT; i++) {
+	struct element* e = &mw_elements[i];
+	if (e->bs != e->obs) invalidateXYWH(h_mainwin,e->x,e->y,e->w,e->h);
+    }
 }
 
-WNDCLASS mainwin = {0,(WNDPROC)WindowProc,0,sizeof (void*),NULL,NULL,NULL,(HBRUSH) COLOR_BTNFACE+1,NULL,"helloMain"};
+void mainWinFocusFunc(HWND hWnd, int focused) {
+    mw_elements[WE_TITLEBAR].bs = focused;
+    if (mw_elements[WE_TITLEBAR].bs != mw_elements[WE_TITLEBAR].obs) InvalidateRect(hWnd,&mainTitleRect,0);
+}
+
+void mainWinMenuFunc(HWND hWnd, int menuid) {
+
+    switch (menuid) {
+	case IDM_I_OPENFILE:
+	    openFileAndPlay();
+	    break;
+	case IDM_I_OPENLOC:
+	    break;
+	case IDM_I_OPENURL: {
+				int r = uiInputBox(hWnd, "Input the URL of the resource to be played:", filePath, 1024);
+				if (r) filePlay();
+				break; }
+	case IDM_I_FILEINFO:
+			    ip->InfoBox(filePath, hWnd);
+			    break;
+	case IDM_I_ABOUT:
+			    uiOKMessageBox(hWnd, "amptest - https://github.com/usrshare/amptest/", "About amptest", MB_ICONINFORMATION);
+			    break;
+	case IDM_O_INPUTPREF:
+			    ip->Config(hWnd);
+			    break;
+	case IDM_O_OUTPUTPREF:
+			    op->Config(hWnd);
+			    break;
+	case IDM_I_EXIT:
+			    ExitProcess(0);
+			    break;
+    }
+
+}
+
+void mainWinPaintFunc(HWND hWnd) {
+    int i=0;
+    struct element* cur = &mw_elements[0];
+    do {
+	i = find_element_to_update(WE_COUNT,mw_elements,&cur);
+
+	switch (cur - mw_elements) {
+	    case WE_BACKGROUND:
+		skinBlit(hWnd, skin.mainbitmap, 0, 0, 0, 0, 0, 0);
+		break;
+	    case WE_TITLEBAR:
+		if (GetForegroundWindow() == hWnd) {
+		    skinBlit(hWnd, skin.titlebitmap, 27, 0, 0, 0, 275, 14);
+		} else {
+		    skinBlit(hWnd, skin.titlebitmap, 27, 15, 0, 0, 275, 14);
+		}
+		break;
+	    case WE_PLAYPAUS: {
+				  switch(cur->bs) {
+				      case PS_STOP:
+					  skinBlit(hWnd, skin.mainbitmap, cur->x, cur->y, cur->x, cur->y, 2, 9);
+					  skinBlit(hWnd, skin.playpaus, 18, 0, cur->x + 2, cur->y,9, 9);
+					  break;
+				      case PS_PAUSE:
+					  skinBlit(hWnd, skin.mainbitmap, cur->x, cur->y, cur->x, cur->y, 2, 9);
+					  skinBlit(hWnd, skin.playpaus, 9, 0, cur->x + 2, cur->y, 9, 9);
+					  break;
+				      case PS_PLAY_NOSYNCH:
+					  skinBlit(hWnd, skin.playpaus, 1, 0, cur->x + 3, cur->y, 8, 9);
+					  skinBlit(hWnd, skin.playpaus, 39, 0, cur->x, cur->y, 3, 9);
+					  break;
+				      case PS_PLAY_SYNCH:
+					  skinBlit(hWnd, skin.playpaus, 1, 0, cur->x + 3, cur->y, 8, 9);
+					  skinBlit(hWnd, skin.playpaus, 36, 0, cur->x, cur->y, 3, 9);
+					  break;
+				  }
+
+			      }
+			      break;
+	    case WE_TIMER: {
+			       if (cur->bs == TIMER_BLANK) {
+				   skinDrawTimeString(hWnd, "     ", cur->x, cur->y);
+			       } else {
+				   skinDrawTime(hWnd, ip->GetOutputTime()/1000, cur->x, cur->y);
+			       }
+			       break; }
+	    case WE_TITLE: {
+
+			       char title[128];
+
+			       sprintf(title,"hello world");
+			       int titlesz = skinTextLength(title);
+
+			       if (op->IsPlaying()) {
+
+				   int lms = 0;
+				   char f_title[GETFILEINFO_TITLE_LENGTH];
+				   ip->GetFileInfo(NULL,f_title,&lms);
+
+				   snprintf(title,128,"%.112s (%d:%02d)",f_title, lms / (60 * 1000), abs((lms / 1000) % 60));
+				   titlesz = skinTextLength(title);
+				   if (titlesz > cur->w) { strcat(title, " *** "); titlesz = skinTextLength(title); }
+			       }
+
+			       while (scrollcnt >= skinTextLengthC(title)) scrollcnt = 0;
+
+			       if (titlesz <= (cur->w)) {
+				   skinDrawText(h_mainwin,title,cur->x,cur->y,cur->w,0);
+			       } else {
+				   skinDrawText(h_mainwin,title,cur->x,cur->y,cur->w,scrollcnt % titlesz);
+				   skinDrawText(h_mainwin,title,cur->x + titlesz - ((5*scrollcnt) % titlesz),cur->y,cur->w - (titlesz - ((5*scrollcnt) % titlesz)),0);
+			       }
+			   }
+			   break;
+	    case WE_BITRATE: {
+				 invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
+				 char bitrate[4];
+				 snprintf(bitrate,4,"%3d",pb.bitrate);
+				 skinDrawText(h_mainwin,bitrate,cur->x,cur->y,cur->w,0);
+				 break;
+			     }
+	    case WE_MIXRATE: {
+				 invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
+				 char samplerate[3];
+				 snprintf(samplerate,3,"%2d",pb.samplerate);
+				 skinDrawText(h_mainwin,samplerate,cur->x,cur->y,cur->w,0);
+				 break;
+			     }
+	    case WE_MONOSTER: {
+				  invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
+
+				  skinBlit(hWnd, skin.monoster, 29, (pb.channels == 1) ? 0 : 12, cur->x, cur->y, 27, 12);
+				  skinBlit(hWnd, skin.monoster, 0, (pb.channels >= 2) ? 0 : 12, cur->x + 27, cur->y, 29, 12);
+				  break;
+			      }
+	    case WE_B_MENU:
+			      skinBlit(hWnd, skin.titlebitmap,0,i ? 9 : 0,6,3,9,9);
+			      break;
+	    case WE_B_MINIMIZE:
+			      skinBlit(hWnd, skin.titlebitmap,9,i ? 9 : 0,244,3,9,9);
+			      break;
+	    case WE_B_WINDOWSHADE:
+			      skinBlit(hWnd, skin.titlebitmap,i ? 9 : 0,18,254,3,9,9);
+			      break;
+	    case WE_B_CLOSE:
+			      skinBlit(hWnd, skin.titlebitmap,18,i ? 9 : 0,264,3,9,9);
+			      break;
+	    case WE_B_PREV:
+			      skinBlit(hWnd, skin.cbuttons, 0, i ? 18 : 0, 16,88,23,18);
+			      break;	
+	    case WE_B_PLAY:
+			      skinBlit(hWnd, skin.cbuttons, 23, i ? 18 : 0, 16+23,88,23,18);
+			      break;	
+	    case WE_B_PAUSE:
+			      skinBlit(hWnd, skin.cbuttons, 46, i ? 18 : 0, 16+46,88,23,18);
+			      break;	
+	    case WE_B_STOP:
+			      skinBlit(hWnd, skin.cbuttons, 69, i ? 18 : 0, 16+69,88,23,18);
+			      break;	
+	    case WE_B_NEXT:
+			      skinBlit(hWnd, skin.cbuttons, 92, i ? 18 : 0, 16+92,88,22,18);
+			      break;
+	    case WE_B_OPEN:
+			      skinBlit(hWnd, skin.cbuttons, 114, i ? 16 : 0, 136,89,22,16);
+			      break; 
+	    case WE_B_SCROLLBAR:
+			      invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
+
+			      if (mw_elements[WE_B_SCROLLBAR].value >= 0) {
+				  skinBlit(hWnd, skin.posbar, 0, 0, cur->x, cur->y, 248, 10);
+
+				  if (cur->bs > 0) {
+				      int px = cur->bs - 1 - (29/2);
+				      if (px < 0) px=0; if (px >= 219) px=218;
+				      skinBlit(hWnd, skin.posbar, 278, 0, cur->x + px, cur->y, 29, 10); 
+
+				  } else {
+				      skinBlit(hWnd, skin.posbar, 248, 0, cur->x + mw_elements[WE_B_SCROLLBAR].value, cur->y, 29, 10); 
+				  }
+
+			      } else {
+				  skinBlit(hWnd, skin.mainbitmap, cur->x, cur->y, cur->x, cur->y, 248, 10); 
+			      }
+	}
+    } while (cur);
+    windowBlit(hWnd);
+}
 
 int ampInit() {
 
@@ -953,13 +742,8 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
     SetConsoleOutputCP(65001); //this program still outputs everything as UTF-8, even when running in Windows.
 
-    mainwin.hInstance = GetModuleHandle(0);
-    mainwin.hCursor = LoadCursor(0,IDC_ARROW);
-
-    RegisterClass(&mainwin);
-    InitCommonControls();
-
-    h_mainmenu = LoadMenu(mainwin.hInstance, MAKEINTRESOURCE(IDM_MAINMENU) );
+    initMainMenu();
+    initMainWindow();
 
     // force the initial draw of all elements.
     for (int i=0; i < WE_COUNT; i++ ) {
@@ -970,10 +754,18 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
     ampInit();
 
-    h_mainwin = CreateWindowEx(0, "helloMain", "hello world", WS_VISIBLE | WS_POPUP, 128, 128, 275, 116, NULL, NULL, mainwin.hInstance, NULL);
+    struct windowCallbacks wincb = {
+	.focuscb = mainWinFocusFunc,
+	.timercb = mainWinTimerFunc,
+	.paintcb = mainWinPaintFunc,
+	.menucb = mainWinMenuFunc,
+	
+	.holdcb = handleHoldEvents,
+	.clickcb = handleClickEvents,
+	.dblclickcb = handleDoubleClickEvents,
+    };
 
-
-    SetTimer(h_mainwin,0,50,NULL);
+    createMainWindow(&wincb);
 
     skin.mainbitmap = loadSkinBitmap("skin\\main.bmp");
     skin.titlebitmap = loadSkinBitmap("skin\\titlebar.bmp");
@@ -998,15 +790,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
     } else text_layout = default_text_layout;
 
-    //this is where WindowProc will start being called.
+    windowLoop();
 
-    MSG lastmsg;
-    while (GetMessage(&lastmsg,NULL,0,0)) {
-	TranslateMessage(&lastmsg);
-	DispatchMessage(&lastmsg);
-    }
-
-
-    MessageBoxA(0, "hello world", "test", 0);
     return 0;
 }
