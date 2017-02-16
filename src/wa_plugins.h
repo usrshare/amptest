@@ -1,9 +1,8 @@
 #ifndef WA_PLUGINS_H
 #define WA_PLUGINS_H
-
-#include <windows.h>
-
 //this file is responsible for working with Winamp plugins
+#include <stdint.h>
+#include "wintypes.h"
 
 struct waGeneralPlugin {
 	int version;

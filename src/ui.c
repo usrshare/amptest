@@ -1,8 +1,9 @@
 // vim: cin:sts=4:sw=4
 #include <windows.h>
 #include <commctrl.h>
+#include <stdio.h>
 #include "ui.h"
-
+#include "win_misc.h"
 #include "menus.h"
 
 HWND h_mainwin;
@@ -32,6 +33,14 @@ struct windowData {
 
 struct windowData* getWindowData(HWND hWnd) {
     return (struct windowData*) GetWindowLongPtr(hWnd,0);
+}
+
+HBITMAP loadSkinBitmap (const char* filename) {
+    HBITMAP r = LoadImage(NULL, filename, IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
+    if (r == NULL) {
+	msgerror(filename);
+    }
+    return r;
 }
 
 int skinInitializePaint(HWND hWnd) {
@@ -95,6 +104,11 @@ int skinDestroyPaint(HWND hWnd) {
     DeleteDC(wdata->hdcMem);
     wdata->hdcMem = 0;
     return 0;
+}
+
+int invalidateXYWH(HWND hWnd, unsigned int x, unsigned int y, unsigned int w, unsigned int h) {
+    CONST RECT r = {.top = y, .left = x, .bottom = y+h, .right = x+w};
+    return InvalidateRect(hWnd,&r,0);
 }
 
 int showSystemMenu(HWND hWnd, int submenu, int x, int y) {
@@ -291,3 +305,86 @@ int uiInputBox(HWND hWnd, const char* prompt, char* rstring, size_t rstrSz) {
     DialogBoxParam(NULL, MAKEINTRESOURCE(IDD_INPUTBOX), hWnd, InputBoxProc, (LPARAM)&p);
     return 0;
 }
+
+void stardotify(const char* extensions, char* o_extensions) {
+    //for size reasons, make sure the o_extensions buffer is at least twice as large as the input one, incl. the zero terminator.
+    //this is enough to handle the worst case scenario, i guarantee.
+
+    int sl = strlen(extensions) + 1;
+    char c_ext [sl]; strcpy(c_ext,extensions);
+
+    char* saveptr = NULL;
+    char* cur = strtok_r(c_ext,";",&saveptr);
+    while (cur) {
+	strcat(o_extensions,"*.");
+	strcat(o_extensions,cur);
+
+	cur = strtok_r(NULL,";",&saveptr);
+	if (cur) strcat(o_extensions,";");
+    }
+    free(c_ext);
+    return;
+}
+
+char* parse_winamp_file_formats(const char* str, char* o_filters, unsigned int o_sz) {
+
+//this function must be used only on strings where the programmer knows there's a double zero at the end.
+
+    char* res_cur = o_filters;
+    unsigned int r_szleft = o_sz-2;
+
+    const char* extensions = str; const char* description = strchr(str, 0) + 1;
+
+    while (extensions[0] != 0) {
+
+	int el = (strlen(extensions)+1)*2;
+	char o_ext[el]; o_ext[0] = 0;
+
+	stardotify(extensions, o_ext);
+
+	int r = snprintf(res_cur,r_szleft,"%s (%s)\0%s\0",description, o_ext, o_ext);
+	if (r > r_szleft) return NULL;
+	res_cur += r;
+	r_szleft -= o_sz;
+
+	extensions = strchr(description, 0) + 1;
+	description = strchr(extensions, 0) + 1;
+    }
+
+    return res_cur;
+}
+
+int uiOpenFile(HWND hWnd, unsigned int types_c, const char** types_v, char* out_file, unsigned int out_sz) {
+
+    // -- this huge piece of code below concatenates all the filter strings into one.
+
+    char res_total[8192]; //if that's not enough, ease up on the plugins!
+    char* res_last = res_total;
+
+    for (int i=0; i< types_c; i++) {
+	if (res_last) res_last = parse_winamp_file_formats(types_v[i],res_last,8192 - (res_last - res_total));
+    }
+
+    res_last[0] = 0; res_last[1] = 0;
+
+    // -- finally!
+    
+    OPENFILENAME ofn = {
+	.lStructSize = sizeof ofn,
+	.hwndOwner = h_mainwin,
+	.hInstance = NULL,
+	.lpstrFilter = res_total,
+	.lpstrCustomFilter = NULL,
+	.nMaxCustFilter = 0,
+	.nFilterIndex = 1,
+	.lpstrFile = out_file,
+	.nMaxFile = out_sz,
+    };
+    int r = GetOpenFileName(&ofn);
+    return r;
+}
+
+void initConsole(void) {
+    SetConsoleOutputCP(65001); //this program still outputs everything as UTF-8, even when running in Windows.
+}
+

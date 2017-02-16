@@ -1,13 +1,6 @@
 #ifndef UI_H
 #define UI_H
-#include <stdint.h>
-
-#ifndef WHND
-//all the code in main.c, wa_plugins.c and other files that wants to tell windows apart,
-//but doesn't really do anything with them, WHND would be treated as an intptr, which,
-//according to MSDN, it pretty much is.
-typedef intptr_t WHND;
-#endif
+#include "wintypes.h"
 
 extern HWND h_mainwin;
 
@@ -39,10 +32,13 @@ enum window_types {
     WT_PLAYLIST
 };
 
+HBITMAP loadSkinBitmap (const char* filename);
+
 int skinInitializePaint(HWND hWnd);
 int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int h);
 int windowBlit(HWND hWnd);
 int skinDestroyPaint(HWND hWnd);
+int invalidateXYWH(HWND hWnd, unsigned int x, unsigned int y, unsigned int w, unsigned int h);
 
 int showSystemMenu(HWND hWnd, int submenu, int x, int y);
 
@@ -60,5 +56,8 @@ enum uiMessageBoxType {
 
 int uiOKMessageBox(HWND parenthWnd, const char* text, const char* title, int type);
 int uiInputBox(HWND hWnd, const char* prompt, char* rstring, size_t rstrSz);
+
+int uiOpenFile(HWND hWnd, unsigned int types_c, const char** types_v, char* out_file, unsigned int out_sz);
+void initConsole(void);
 
 #endif

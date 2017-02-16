@@ -1,5 +1,8 @@
 // vim: cin:sts=4:sw=4
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
 #include <stdbool.h>
 #include <locale.h>
 
@@ -204,8 +207,6 @@ int skinDrawTime(HWND hWnd, int time, int x, int y) {
     return skinDrawTimeString(hWnd,text,x,y);
 }
 
-CONST RECT mainTitleRect = {.left = 0, .top = 0, .right = 275, .bottom = 14};
-
 int hover(short x, short y, short w, short h) {
 
     if ((mouse.X >= x) && (mouse.X < (x+w)) &&
@@ -239,10 +240,6 @@ int click(short x, short y, short w, short h, short bmask) {
     return 0;
 }
 
-int invalidateXYWH(HWND hWnd, UINT x, UINT y, UINT w, UINT h) {
-    CONST RECT r = {.top = y, .left = x, .bottom = y+h, .right = x+w};
-    return InvalidateRect(hWnd,&r,0);
-}
 
 enum element_avail {
     EA_NEVER = 0, //never available
@@ -423,19 +420,10 @@ int filePlay(void) {
 }
 
 int openFile(void) {
-    OPENFILENAME ofn = {
-	.lStructSize = sizeof ofn,
-	.hwndOwner = h_mainwin,
-	.hInstance = NULL,
-	.lpstrFilter = "MP3 Files\0*.mp3\0\0",
-	.lpstrCustomFilter = NULL,
-	.nMaxCustFilter = 0,
-	.nFilterIndex = 1,
-	.lpstrFile = filePath,
-	.nMaxFile = 1024,
-    };
-    int r = GetOpenFileName(&ofn);
-    return r;
+
+    const char* filters[2] = {ip->FileExtensions, NULL};
+
+    return uiOpenFile(h_mainwin, 1, filters, filePath, 1024);
 }
 
 int openFileAndPlay(void) {
@@ -465,7 +453,7 @@ int handleClickEvents(HWND hWnd) {
 	case WE_B_MENU: showSystemMenu(hWnd, 0, 6, 12);
 			break;
 	case WE_B_CLOSE:
-			ExitProcess(0);
+			exit(0);
 			break;
 	case WE_B_PAUSE:
 			if (ip->IsPaused())
@@ -531,7 +519,7 @@ void mainWinTimerFunc(HWND hWnd) {
 
 void mainWinFocusFunc(HWND hWnd, int focused) {
     mw_elements[WE_TITLEBAR].bs = focused;
-    if (mw_elements[WE_TITLEBAR].bs != mw_elements[WE_TITLEBAR].obs) InvalidateRect(hWnd,&mainTitleRect,0);
+    //if (mw_elements[WE_TITLEBAR].bs != mw_elements[WE_TITLEBAR].obs) InvalidateRect(hWnd,&mainTitleRect,0);
 }
 
 void mainWinMenuFunc(HWND hWnd, int menuid) {
@@ -550,7 +538,7 @@ void mainWinMenuFunc(HWND hWnd, int menuid) {
 			    ip->InfoBox(filePath, hWnd);
 			    break;
 	case IDM_I_ABOUT:
-			    uiOKMessageBox(hWnd, "amptest - https://github.com/usrshare/amptest/", "About amptest", MB_ICONINFORMATION);
+			    uiOKMessageBox(hWnd, "amptest - https://github.com/usrshare/amptest/", "About amptest", UIMB_INFO);
 			    break;
 	case IDM_O_INPUTPREF:
 			    ip->Config(hWnd);
@@ -559,7 +547,7 @@ void mainWinMenuFunc(HWND hWnd, int menuid) {
 			    op->Config(hWnd);
 			    break;
 	case IDM_I_EXIT:
-			    ExitProcess(0);
+			    exit(0);
 			    break;
     }
 
@@ -576,11 +564,7 @@ void mainWinPaintFunc(HWND hWnd) {
 		skinBlit(hWnd, skin.mainbitmap, 0, 0, 0, 0, 0, 0);
 		break;
 	    case WE_TITLEBAR:
-		if (GetForegroundWindow() == hWnd) {
-		    skinBlit(hWnd, skin.titlebitmap, 27, 0, 0, 0, 275, 14);
-		} else {
-		    skinBlit(hWnd, skin.titlebitmap, 27, 15, 0, 0, 275, 14);
-		}
+		skinBlit(hWnd, skin.titlebitmap, 27, cur->bs ? 0 : 15, 0, 0, 275, 14);
 		break;
 	    case WE_PLAYPAUS: {
 				  switch(cur->bs) {
@@ -730,17 +714,11 @@ int ampInit() {
     return 0;
 }
 
-HBITMAP loadSkinBitmap (const char* filename) {
-    HBITMAP r = LoadImage(NULL, filename, IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
-    if (r == NULL) {
-	msgerror(filename);
-    }
-    return r;
-}
 
-int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
+int WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
 
-    SetConsoleOutputCP(65001); //this program still outputs everything as UTF-8, even when running in Windows.
+
+    initConsole();
 
     initMainMenu();
     initMainWindow();

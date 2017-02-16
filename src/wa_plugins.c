@@ -1,3 +1,4 @@
+#include <windows.h>
 #include "wa_plugins.h"
 #include "win_misc.h"
 
