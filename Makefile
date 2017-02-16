@@ -10,7 +10,9 @@ WINDRES=$(PREFIX)windres
 else
 WINDRES=windres
 endif
-CFLAGS=-std=c11 -I/usr/share/mingw-w64/include -Wall -Wno-unknown-pragmas -fdiagnostics-show-option
+
+CFLAGS=-std=c11 -I/usr/share/mingw-w64/include -Wall -Wno-unknown-pragmas
+LDFLAGS=
 LIBS=-lcomctl32 -lgdi32 -mwindows
 
 _OBJS = main.o plist.o wa_plugins.o ui.o win_misc.o menus.rc.o
@@ -24,7 +26,7 @@ endif
 OBJS = $(patsubst %,$(OBJDIR)/%,$(_OBJS))
 
 hello.exe: $(OBJS)
-	$(CC) -o $@ $^ $(LIBS)
+	$(CC) -o $@ $^ $(LIBS) $(LDFLAGS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(OBJDIR)
 	$(CC) -c -o $@ $< $(CFLAGS) $(DEFS)

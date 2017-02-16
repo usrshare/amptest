@@ -3,9 +3,9 @@
 
 #ifndef _WINDOWS_
 
-//all the code in main.c, wa_plugins.c and other files that wants to tell windows apart,
-//but doesn't really do anything with them, WHND would be treated as an intptr, which,
-//according to MSDN, it pretty much is.
+//these typedefs are used for files that don't use any of the WinAPI functions, but still have
+//to pass around types used by it. They should have identical length on both 32- and 64-bit
+//versions of windows.
 
 typedef void* HWND;
 typedef void* HINSTANCE;

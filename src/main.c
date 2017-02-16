@@ -564,6 +564,7 @@ void mainWinPaintFunc(HWND hWnd) {
 		skinBlit(hWnd, skin.mainbitmap, 0, 0, 0, 0, 0, 0);
 		break;
 	    case WE_TITLEBAR:
+		invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
 		skinBlit(hWnd, skin.titlebitmap, 27, cur->bs ? 0 : 15, 0, 0, 275, 14);
 		break;
 	    case WE_PLAYPAUS: {
@@ -715,8 +716,7 @@ int ampInit() {
 }
 
 
-int WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
-
+int main (int argc, char** argv) {
 
     initConsole();
 
@@ -737,7 +737,7 @@ int WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int 
 	.timercb = mainWinTimerFunc,
 	.paintcb = mainWinPaintFunc,
 	.menucb = mainWinMenuFunc,
-	
+
 	.holdcb = handleHoldEvents,
 	.clickcb = handleClickEvents,
 	.dblclickcb = handleDoubleClickEvents,
