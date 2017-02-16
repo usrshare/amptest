@@ -1,5 +1,6 @@
 #ifndef UI_H
 #define UI_H
+#include <stdint.h>
 #include "wintypes.h"
 
 extern HWND h_mainwin;
