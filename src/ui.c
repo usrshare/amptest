@@ -326,6 +326,7 @@ void stardotify(const char* extensions, char* o_extensions) {
     return;
 }
 
+/*
 void print_until_dbl_zero(const char* str) {
 
     const char* cur = str;
@@ -337,6 +338,7 @@ void print_until_dbl_zero(const char* str) {
     }
     puts("");
 }
+*/
 
 char* concat_winamp_file_formats(const char* str, char* o_allfiles, unsigned int o_sz) {
     
@@ -353,7 +355,7 @@ char* concat_winamp_file_formats(const char* str, char* o_allfiles, unsigned int
 
 	stardotify(extensions, o_ext);
 
-	int r = snprintf(all_cur,r_szleft,"%s%s",o_ext, *(strchr(description,0)+1) ? "" : ";" );
+	int r = snprintf(all_cur,r_szleft,"%s%s",o_ext, *(strchr(description,0)+1) ? ";" : "" );
 	if (r > r_szleft) return NULL;
 	all_cur += r;
 	r_szleft -= r;
@@ -408,12 +410,13 @@ int uiOpenFile(HWND hWnd, unsigned int types_c, const char** types_v, char* out_
 
     for (int i=0; i< types_c; i++) {
 	if (res_last) res_last = concat_winamp_file_formats(types_v[i],res_last,RES_SIZE - (res_last - res_total));
+	res_last[0] = (i < (types_c-1)) ? ';' : 0; res_last++;
     }
     for (int i=0; i< types_c; i++) {
 	if (res_last) res_last = parse_winamp_file_formats(types_v[i],res_last,RES_SIZE - (res_last - res_total));
     }
     res_last[0] = 0; res_last++;
-    print_until_dbl_zero(res_total);
+    //print_until_dbl_zero(res_total);
 
     // -- finally!
     

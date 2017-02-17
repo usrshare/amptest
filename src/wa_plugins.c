@@ -119,7 +119,7 @@ int checkExtensions(const char* media_fn, const char* extensions) {
 	char* ext_tok = strtok_r(ext_tmp,";",&saveptr);
 
 	while (ext_tok) {
-		if (strcasecmp(media_ext,ext_tok) == 0) return 1;
+		if (strcasecmp(media_ext,ext_tok) == 0) { return 1;}
 		ext_tok = strtok_r(NULL,";",&saveptr);
 	}
 
@@ -129,18 +129,16 @@ int checkExtensions(const char* media_fn, const char* extensions) {
 }
 
 int preparePlugin(const char* media_fn) {
-	printf("-> %s\n",media_fn);
-
 	for (int i=0; i < inputs_c; i++) {
 		int r = 0;
 		r = checkExtensions(media_fn, inputs_v[i]->FileExtensions);
 		if (!r) r = inputs_v[i]->IsOurFile(media_fn);
 		if (r) {
-
 			if (ip != inputs_v[i]) {
-				ip = inputs_v[i];
-				return 0;
 			}
+			ip = inputs_v[i];
+			//printf("Plugin: %s\n", ip->description);
+			return 0;
 		}
 	}	
 	return 1;
