@@ -35,6 +35,11 @@ struct windowData* getWindowData(HWND hWnd) {
     return (struct windowData*) GetWindowLongPtr(hWnd,0);
 }
 
+HBITMAP loadOptSkinBitmap (const char* filename) {
+    HBITMAP r = LoadImage(NULL, filename, IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
+    return r;
+}
+
 HBITMAP loadSkinBitmap (const char* filename) {
     HBITMAP r = LoadImage(NULL, filename, IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE);
     if (r == NULL) {

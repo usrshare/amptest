@@ -24,6 +24,8 @@ struct skinData {
     HBITMAP monoster;
     HBITMAP playpaus;
     HBITMAP nums_ex;
+    HBITMAP volume;
+    HBITMAP balance;
 } skin;
 
 struct playbackData {
@@ -299,8 +301,8 @@ struct element mw_elements[WE_COUNT] = {
     {  .x = 254, .y = 3, .w = 9,  .h = 9,	.type=ET_BUTTON}, //windowshade
     {  .x = 264, .y = 3, .w = 9,  .h = 9,	.type=ET_BUTTON}, //close
     {  .x = 11, .y = 22, .w = 10, .h = 43,	.type=ET_BUTTON}, //OAIDV -- larger than the assoc. images
-    {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_HSLIDER, .slider_w = 14}, //volume
-    {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_HSLIDER, .slider_w = 14}, //balance
+    {  .x = 106, .y = 57, .w = 68, .h = 14,	.type=ET_HSLIDER, .slider_w = 14}, //volume
+    {  .x = 182, .y = 57, .w = 38, .h = 14,	.type=ET_HSLIDER, .slider_w = 14}, //balance
     {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_BUTTON}, //equalizer btn
     {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_BUTTON}, //playlist btn
     {  .x = 16, .y = 72, .w = 248, .h = 10,	.type=ET_HSLIDER, .slider_w = 28}, //scroll bar
@@ -677,6 +679,13 @@ void mainWinPaintFunc(HWND hWnd) {
 			      } else {
 				  skinBlit(hWnd, skin.mainbitmap, cur->x, cur->y, cur->x, cur->y, 248, 10); 
 			      }
+			      break;
+	    case WE_B_VOLUME:
+				  skinBlit(hWnd, skin.volume, 0, 0, cur->x, cur->y, cur->w, cur->h); 
+			    break;
+	    case WE_B_BALANCE:
+				  skinBlit(hWnd, skin.balance, 9, 0, cur->x, cur->y, cur->w, cur->h); 
+			    break;
 	}
     } while (cur);
     windowBlit(hWnd);
@@ -734,6 +743,10 @@ int main (int argc, char** argv) {
     skin.monoster = loadSkinBitmap("skin\\monoster.bmp");
     skin.playpaus = loadSkinBitmap("skin\\playpaus.bmp");
     skin.nums_ex = loadSkinBitmap("skin\\nums_ex.bmp");
+    skin.volume = loadSkinBitmap("skin\\volume.bmp");
+   
+    skin.balance = loadOptSkinBitmap("skin\\balance.bmp");
+    if (!skin.balance) skin.balance = skin.volume;
 
     load_text_layout("skin\\text.txt");
 

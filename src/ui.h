@@ -33,6 +33,7 @@ enum window_types {
     WT_PLAYLIST
 };
 
+HBITMAP loadOptSkinBitmap (const char* filename);
 HBITMAP loadSkinBitmap (const char* filename);
 
 int skinInitializePaint(HWND hWnd);
