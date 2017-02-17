@@ -288,8 +288,8 @@ struct element mw_elements[WE_COUNT] = {
     {  .x = 0,   .y = 0, .w = 275, .h = 116}, //window background
     {  .x = 0,   .y = 0, .w = 275,  .h = 14}, //titlebar
     {  .x = 24,  .y = 28,.w =  11,  .h = 9},  //play/pause indicator
-    {  .x = 35,  .y = 26,.w =  63,  .h = 13}, //timer
-    {  .x = 110, .y = 27,.w = 155,  .h = 6},  //title scroller 
+    {  .x = 35,  .y = 26,.w =  63,  .h = 13, .type = ET_MDBUTTON}, //timer
+    {  .x = 110, .y = 27,.w = 155,  .h = 6,  .type = ET_MDBUTTON},  //title scroller 
     {  .x = 111, .y = 43,.w = 15,   .h = 6},  //bitrate
     {  .x = 156, .y = 43,.w = 10,   .h = 6},  //sample rate
     {  .x = 212, .y = 41,.w = 56,   .h = 12}, //mono/stereo
@@ -348,13 +348,22 @@ int handleHoldEvents(HWND hWnd) {
 		case ET_BUTTON: newbs = 1; break;
 		case ET_HSLIDER: newbs = 1 + getHSliderValue(e); break; 
 		case ET_VSLIDER: newbs = 1 + (mouse.Y - e->y); break;
-		case ET_MDBUTTON: newbs = 1; break;
+		case ET_MDBUTTON: break;
 	    }
 	} else newbs = 0;
 	e->bs = newbs;
 	if (e->bs != e->obs) invalidateXYWH(hWnd,e->x,e->y,e->w,e->h);
     }
     return can_drag;
+}
+
+int get_hover_button() {
+    for (int i=0; i < WE_COUNT; i++) {
+	struct element* e = &mw_elements[i];
+	if (e->type == ET_LABEL) continue; //skip label elements
+	if (hover(e->x,e->y,e->w,e->h)) return i;
+    }
+    return -1;
 }
 
 int get_click_button() {
@@ -367,6 +376,25 @@ int get_click_button() {
 }
 
 int handleDoubleClickEvents(HWND hWnd) {
+    printf("dblclk %d,%d\n",mouse.X,mouse.Y);
+
+    switch (get_hover_button()) {
+	case WE_TITLE:
+			exit(0);
+			break;
+    }
+    return 0;
+}
+
+int find_element_to_update(unsigned int element_c, struct element* element_v, struct element** cur) {
+
+    while ((*cur) < (element_v + element_c)) {
+	if ((*cur)->bs != (*cur)->obs) { (*cur)->obs = (*cur)->bs; return (*cur)->bs; }
+	(*cur)++;
+    }
+    *cur = NULL;
+    return 0;
+
 
     return 0;
 }
@@ -442,17 +470,6 @@ int handleClickEvents(HWND hWnd) {
 				 break; }
     }
     return 0;
-}
-
-int find_element_to_update(unsigned int element_c, struct element* element_v, struct element** cur) {
-
-    while ((*cur) < (element_v + element_c)) {
-	if ((*cur)->bs != (*cur)->obs) { (*cur)->obs = (*cur)->bs; return (*cur)->bs; }
-	(*cur)++;
-    }
-    *cur = NULL;
-    return 0;
-
 }
 
 void mainWinTimerFunc(HWND hWnd) {

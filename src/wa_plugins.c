@@ -24,7 +24,7 @@ int return0(void) {
 struct waInputPlugin* loadInputPlugin(const char* filename) {
 
 	HMODULE in = LoadLibrary(filename);
-	if (!in) { msgerror("load input"); return NULL; }
+	if (!in) { return NULL; }
 	
 	voidp_func_void in_get = (voidp_func_void) GetProcAddress(in, "winampGetInModule2");
 	if (!in_get) { return NULL; }
