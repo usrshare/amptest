@@ -338,6 +338,7 @@ int handleHoldEvents(HWND hWnd) {
     for (int i=0; i < WE_COUNT; i++) {
 	struct element* e = &mw_elements[i];
 	if (e->type == ET_LABEL) continue; //skip label elements
+	if (e->type == ET_MDBUTTON) continue; //skip label elements
 	if (hover(e->x, e->y, e->w, e->h)) can_drag = 0;
 
 	int newbs;
@@ -431,7 +432,10 @@ int updateScrollbarValue(void) {
 	if (xpos >= 219) xpos = 219;
 	mw_elements[WE_B_SCROLLBAR].value = xpos;
 	if (mw_elements[WE_B_SCROLLBAR].bs <= 0) mw_elements[WE_B_SCROLLBAR].bs = -1-xpos;
-    } else mw_elements[WE_B_SCROLLBAR].value = -1;
+    } else { 
+	mw_elements[WE_B_SCROLLBAR].value = -1;
+	if (mw_elements[WE_B_SCROLLBAR].bs <= 0) mw_elements[WE_B_SCROLLBAR].bs = -1;
+    }
     return 0;
 }
 
@@ -479,11 +483,11 @@ void mainWinTimerFunc(HWND hWnd) {
 	updateScrollbarValue();
     }
 
-    if (op->IsPlaying()) {
+    if ( (ip) && (op->IsPlaying()) ) {
 	if ((timercnt % 5) == 0) scrollcnt++; 
 	mw_elements[WE_TITLE].bs = 1 + scrollcnt;
-	if ( (ip) && (ip->IsPaused()) ) { mw_elements[WE_PLAYPAUS].bs = PS_PAUSE; }
-	mw_elements[WE_TIMER].bs = ip ? ((ip->IsPaused() && (timercnt % 20 >= 10)) ? TIMER_BLANK : (ip->GetOutputTime() / 1000)) : TIMER_BLANK;
+	if (ip->IsPaused()) { mw_elements[WE_PLAYPAUS].bs = PS_PAUSE; }
+	mw_elements[WE_TIMER].bs = (ip->IsPaused() && (timercnt % 20 >= 10)) ? TIMER_BLANK : (ip->GetOutputTime() / 1000);
     } else {
 	scrollcnt = 0;
 	mw_elements[WE_TITLE].bs = 0;
@@ -574,7 +578,7 @@ void mainWinPaintFunc(HWND hWnd) {
 			       if ((!ip) || (cur->bs == TIMER_BLANK)) {
 				   skinDrawTimeString(hWnd, "     ", cur->x, cur->y);
 			       } else {
-				   skinDrawTime(hWnd, ip->GetOutputTime()/1000, cur->x, cur->y);
+				   skinDrawTime(hWnd, cur->bs, cur->x, cur->y);
 			       }
 			       break; }
 	    case WE_TITLE: {
