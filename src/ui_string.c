@@ -86,4 +86,5 @@ int load_text_layout(const char* filename) {
 	text_layout = allocd_text_layout;
 
     } else text_layout = default_text_layout;
+    return 0;
 }

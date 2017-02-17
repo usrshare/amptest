@@ -141,9 +141,9 @@ int skinDrawTime(HWND hWnd, int time, int x, int y) {
 
     char text[6];
     if (time >= 0) {
-    snprintf(text,6,"% 03d%02d\n", time / 60, time % 60);
+	snprintf(text,6,"% 03d%02d\n", time / 60, time % 60);
     } else {
-    snprintf(text,6,"-%02d%02d\n", abs(time) / 60, abs(time) % 60);
+	snprintf(text,6,"-%02d%02d\n", abs(time) / 60, abs(time) % 60);
     }
     return skinDrawTimeString(hWnd,text,x,y);
 }
@@ -227,7 +227,27 @@ struct element {
     elementcb drag_cb;
     elementcb click_cb;
     elementcb dblclick_cb;
+
+    unsigned int slider_w; //width (horiz) or height (vert) for sliders
 };
+
+int getHSliderValue(struct element* cur) {
+
+    int mCX = mouse.clickX - cur->x; // x position at the moment of click
+    int mRX = mouse.X - cur->x; // x position at the current moment
+
+    int newval;
+
+    if ( (mCX >= cur->value) && (mCX < (cur->value + cur->slider_w + 1)) ) {
+	newval = cur->value + (mRX - mCX);
+    } else {
+	newval = mRX - (cur->slider_w / 2);
+    }
+
+    if (newval < 0) return 0;
+    if (newval > (cur->w - cur->slider_w + 1)) return (cur->w - cur->slider_w + 1);
+    return newval;
+}
 
 enum windowelements {
     WE_BACKGROUND,
@@ -282,11 +302,11 @@ struct element mw_elements[WE_COUNT] = {
     {  .x = 254, .y = 3, .w = 9,  .h = 9,	.type=ET_BUTTON}, //windowshade
     {  .x = 264, .y = 3, .w = 9,  .h = 9,	.type=ET_BUTTON}, //close
     {  .x = 11, .y = 22, .w = 10, .h = 43,	.type=ET_BUTTON}, //OAIDV -- larger than the assoc. images
-    {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_HSLIDER}, //volume
-    {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_HSLIDER}, //balance
+    {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_HSLIDER, .slider_w = 14}, //volume
+    {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_HSLIDER, .slider_w = 14}, //balance
     {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_BUTTON}, //equalizer btn
     {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_BUTTON}, //playlist btn
-    {  .x = 16, .y = 72, .w = 248, .h = 10,	.type=ET_HSLIDER}, //scroll bar
+    {  .x = 16, .y = 72, .w = 248, .h = 10,	.type=ET_HSLIDER, .slider_w = 28}, //scroll bar
     {  .x = 16, .y = 88, .w = 23, .h = 18,	.type=ET_BUTTON}, //prev
     {  .x = 39, .y = 88, .w = 23, .h = 18,	.type=ET_BUTTON}, //play
     {  .x = 62, .y = 88, .w = 23, .h = 18,	.type=ET_BUTTON}, //pause
@@ -329,7 +349,7 @@ int handleHoldEvents(HWND hWnd) {
 	    switch(e->type) {
 		case ET_LABEL: newbs = 0; break;
 		case ET_BUTTON: newbs = 1; break;
-		case ET_HSLIDER: newbs = 1 + (mouse.X - e->x); break; 
+		case ET_HSLIDER: newbs = 1 + getHSliderValue(e); break; 
 		case ET_VSLIDER: newbs = 1 + (mouse.Y - e->y); break;
 		case ET_MDBUTTON: newbs = 1; break;
 	    }
@@ -388,6 +408,7 @@ int updateScrollbarValue(void) {
     return 0;
 }
 
+
 int handleClickEvents(HWND hWnd) {
 
     switch (get_click_button()) {
@@ -412,9 +433,10 @@ int handleClickEvents(HWND hWnd) {
 			break;
 	case WE_B_SCROLLBAR: {
 				 int len = ip->GetLength();
-				 int px = (mw_elements[WE_B_SCROLLBAR].bs - 1) - (29/2);
-				 if (px < 0) px=0; if (px >= 219) px = 218;
-				 ip->SetOutputTime (len * (double)(px / 218.0));
+				 int px = (mw_elements[WE_B_SCROLLBAR].bs - 1);
+				 int wx = mw_elements[WE_B_SCROLLBAR].w - mw_elements[WE_B_SCROLLBAR].slider_w;
+				 if (px < 0) px=0; if (px > wx) px = wx;
+				 ip->SetOutputTime (len * (px / (double)wx));
 				 updateScrollbarValue();
 				 break; }
     }
@@ -623,8 +645,7 @@ void mainWinPaintFunc(HWND hWnd) {
 				  skinBlit(hWnd, skin.posbar, 0, 0, cur->x, cur->y, 248, 10);
 
 				  if (cur->bs > 0) {
-				      int px = cur->bs - 1 - (29/2);
-				      if (px < 0) px=0; if (px >= 219) px=218;
+				      int px = getHSliderValue(cur); 
 				      skinBlit(hWnd, skin.posbar, 278, 0, cur->x + px, cur->y, 29, 10); 
 
 				  } else {
