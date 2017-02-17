@@ -14,6 +14,15 @@ struct waGeneralPlugin {
 	HINSTANCE hDllInstance;
 };
 
+struct globalFunctions {
+	
+	// info setting (filled in by winamp)
+	void (*SetInfo)(int bitrate, int srate, int stereo, int synched); // if -1, changes ignored? :)
+	HWND hMainWindow;			// winamp's main window (filled in by winamp)
+};
+
+extern struct globalFunctions gf;
+
 //taken from the Winamp SDK
 struct waOutputPlugin {
 	int version;				// module version (OUT_VER)
@@ -168,7 +177,17 @@ struct waInputPlugin {
 	struct waOutputPlugin *outMod; // filled in by winamp, optionally used :)
 };
 
-struct waInputPlugin* loadInputPlugin(const char* filename, struct waOutputPlugin* outputPlugin);
+struct waInputPlugin* loadInputPlugin(const char* filename);
 struct waOutputPlugin* loadOutputPlugin(const char* filename);
+
+int loadNewInputPlugin(const char* filename);
+int preparePlugin(const char* media_fn);
+int scanPlugins(const char* directory);
+
+int countInputPlugins(void);
+int getInputPluginExtensions(int types_c, const char** types_v);
+
+extern struct waInputPlugin* ip;
+extern struct waOutputPlugin* op;
 
 #endif

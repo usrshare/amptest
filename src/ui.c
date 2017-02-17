@@ -326,6 +326,45 @@ void stardotify(const char* extensions, char* o_extensions) {
     return;
 }
 
+void print_until_dbl_zero(const char* str) {
+
+    const char* cur = str;
+    while (*cur != 0) {
+	fputs(cur,stdout);
+	cur += strlen(cur);
+
+	if (cur[1] != 0) { fputs("\e[31m.\e[0m",stdout); cur++;}
+    }
+    puts("");
+}
+
+char* concat_winamp_file_formats(const char* str, char* o_allfiles, unsigned int o_sz) {
+    
+    char* all_cur = o_allfiles;
+    unsigned int r_szleft = o_sz-2;
+
+    const char* extensions = str; const char* description = strchr(str, 0) + 1;
+
+    int i=0;
+    while (extensions[0] != 0) {
+
+	int el = (strlen(extensions)+1)*2;
+	char o_ext[el]; o_ext[0] = 0;
+
+	stardotify(extensions, o_ext);
+
+	int r = snprintf(all_cur,r_szleft,"%s%s",o_ext, *(strchr(description,0)+1) ? "" : ";" );
+	if (r > r_szleft) return NULL;
+	all_cur += r;
+	r_szleft -= r;
+
+	extensions = strchr(description, 0) + 1;
+	description = strchr(extensions, 0) + 1;
+	i++;
+    }
+    return all_cur;
+}
+
 char* parse_winamp_file_formats(const char* str, char* o_filters, unsigned int o_sz) {
 
 //this function must be used only on strings where the programmer knows there's a double zero at the end.
@@ -335,6 +374,7 @@ char* parse_winamp_file_formats(const char* str, char* o_filters, unsigned int o
 
     const char* extensions = str; const char* description = strchr(str, 0) + 1;
 
+    int i=0;
     while (extensions[0] != 0) {
 
 	int el = (strlen(extensions)+1)*2;
@@ -342,15 +382,15 @@ char* parse_winamp_file_formats(const char* str, char* o_filters, unsigned int o
 
 	stardotify(extensions, o_ext);
 
-	int r = snprintf(res_cur,r_szleft,"%s (%s)\0%s\0",description, o_ext, o_ext);
+	int r = snprintf(res_cur,r_szleft,"%s%c%s%c",description, 0, o_ext, 0);
 	if (r > r_szleft) return NULL;
 	res_cur += r;
-	r_szleft -= o_sz;
+	r_szleft -= r;
 
 	extensions = strchr(description, 0) + 1;
 	description = strchr(extensions, 0) + 1;
+	i++;
     }
-
     return res_cur;
 }
 
@@ -358,14 +398,22 @@ int uiOpenFile(HWND hWnd, unsigned int types_c, const char** types_v, char* out_
 
     // -- this huge piece of code below concatenates all the filter strings into one.
 
-    char res_total[8192]; //if that's not enough, ease up on the plugins!
+    #define RES_SIZE 65536
+
+    char res_total[RES_SIZE]; //if that's not enough, ease up on the plugins!
     char* res_last = res_total;
+   
+    int r = sprintf(res_total,"All Supported Files%c",0);
+    res_last += r;
 
     for (int i=0; i< types_c; i++) {
-	if (res_last) res_last = parse_winamp_file_formats(types_v[i],res_last,8192 - (res_last - res_total));
+	if (res_last) res_last = concat_winamp_file_formats(types_v[i],res_last,RES_SIZE - (res_last - res_total));
     }
-
-    res_last[0] = 0; res_last[1] = 0;
+    for (int i=0; i< types_c; i++) {
+	if (res_last) res_last = parse_winamp_file_formats(types_v[i],res_last,RES_SIZE - (res_last - res_total));
+    }
+    res_last[0] = 0; res_last++;
+    print_until_dbl_zero(res_total);
 
     // -- finally!
     
@@ -380,7 +428,7 @@ int uiOpenFile(HWND hWnd, unsigned int types_c, const char** types_v, char* out_
 	.lpstrFile = out_file,
 	.nMaxFile = out_sz,
     };
-    int r = GetOpenFileName(&ofn);
+    r = GetOpenFileName(&ofn);
     return r;
 }
 

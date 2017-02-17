@@ -15,9 +15,6 @@
 
 char filePath[1024];
 
-struct waInputPlugin* ip = NULL;
-struct waOutputPlugin* op = NULL;
-
 struct skinData {
     HBITMAP mainbitmap;
     HBITMAP titlebitmap;
@@ -375,16 +372,18 @@ int handleDoubleClickEvents(HWND hWnd) {
 }
 
 int filePlay(void) {
-    if (op->IsPlaying()) ip->Stop();
+    if ((ip) && (op->IsPlaying())) ip->Stop();
+    if (preparePlugin(filePath)) return 1;
     ip->Play(filePath);
     return 0;
 }
 
 int openFile(void) {
 
-    const char* filters[2] = {ip->FileExtensions, NULL};
-
-    return uiOpenFile(h_mainwin, 1, filters, filePath, 1024);
+    int filter_c = countInputPlugins();
+    const char* filter_v[filter_c];
+    getInputPluginExtensions(filter_c,filter_v);
+    return uiOpenFile(h_mainwin, filter_c, filter_v, filePath, 1024);
 }
 
 int openFileAndPlay(void) {
@@ -396,8 +395,8 @@ int openFileAndPlay(void) {
 int updateScrollbarValue(void) {
 
     if ((op) && (op->IsPlaying())) {
-	int len = ip->GetLength();
-	int cur = ip->GetOutputTime();
+	int len = ip ? ip->GetLength() : 1;
+	int cur = ip ? ip->GetOutputTime() : 0;
 
 	int xpos = (cur * 219) / len;
 	if (xpos < 0) xpos = 0;
@@ -418,13 +417,15 @@ int handleClickEvents(HWND hWnd) {
 			exit(0);
 			break;
 	case WE_B_PAUSE:
+			if (ip) {
 			if (ip->IsPaused())
 			    ip->UnPause();
 			else
 			    ip->Pause();
+			}
 			break;
 	case WE_B_STOP:
-			if (op->IsPlaying()) ip->Stop();
+			if ( (ip) && (op->IsPlaying()) ) ip->Stop();
 			break;
 	case WE_B_OPEN: 
 			if (!openFile()) break;
@@ -432,7 +433,7 @@ int handleClickEvents(HWND hWnd) {
 			filePlay();
 			break;
 	case WE_B_SCROLLBAR: {
-				 int len = ip->GetLength();
+				 int len = ip ? ip->GetLength() : 0;
 				 int px = (mw_elements[WE_B_SCROLLBAR].bs - 1);
 				 int wx = mw_elements[WE_B_SCROLLBAR].w - mw_elements[WE_B_SCROLLBAR].slider_w;
 				 if (px < 0) px=0; if (px > wx) px = wx;
@@ -464,8 +465,8 @@ void mainWinTimerFunc(HWND hWnd) {
     if (op->IsPlaying()) {
 	if ((timercnt % 5) == 0) scrollcnt++; 
 	mw_elements[WE_TITLE].bs = 1 + scrollcnt;
-	if (ip->IsPaused()) { mw_elements[WE_PLAYPAUS].bs = PS_PAUSE; }
-	mw_elements[WE_TIMER].bs = (ip->IsPaused() && (timercnt % 20 >= 10)) ? TIMER_BLANK : (ip->GetOutputTime() / 1000);
+	if ( (ip) && (ip->IsPaused()) ) { mw_elements[WE_PLAYPAUS].bs = PS_PAUSE; }
+	mw_elements[WE_TIMER].bs = ip ? ((ip->IsPaused() && (timercnt % 20 >= 10)) ? TIMER_BLANK : (ip->GetOutputTime() / 1000)) : TIMER_BLANK;
     } else {
 	scrollcnt = 0;
 	mw_elements[WE_TITLE].bs = 0;
@@ -498,16 +499,16 @@ void mainWinMenuFunc(HWND hWnd, int menuid) {
 				if (r) filePlay();
 				break; }
 	case IDM_I_FILEINFO:
-			    ip->InfoBox(filePath, hWnd);
+			    if (ip) ip->InfoBox(filePath, hWnd);
 			    break;
 	case IDM_I_ABOUT:
 			    uiOKMessageBox(hWnd, "amptest - https://github.com/usrshare/amptest/", "About amptest", UIMB_INFO);
 			    break;
 	case IDM_O_INPUTPREF:
-			    ip->Config(hWnd);
+			    if (ip) ip->Config(hWnd);
 			    break;
 	case IDM_O_OUTPUTPREF:
-			    op->Config(hWnd);
+			    if (op) op->Config(hWnd);
 			    break;
 	case IDM_I_EXIT:
 			    exit(0);
@@ -553,7 +554,7 @@ void mainWinPaintFunc(HWND hWnd) {
 			      }
 			      break;
 	    case WE_TIMER: {
-			       if (cur->bs == TIMER_BLANK) {
+			       if ((!ip) || (cur->bs == TIMER_BLANK)) {
 				   skinDrawTimeString(hWnd, "     ", cur->x, cur->y);
 			       } else {
 				   skinDrawTime(hWnd, ip->GetOutputTime()/1000, cur->x, cur->y);
@@ -566,7 +567,7 @@ void mainWinPaintFunc(HWND hWnd) {
 			       sprintf(title,"hello world");
 			       int titlesz = skinTextLength(title);
 
-			       if (op->IsPlaying()) {
+			       if ( (ip) && (op->IsPlaying()) ) {
 
 				   int lms = 0;
 				   char f_title[GETFILEINFO_TITLE_LENGTH];
@@ -664,19 +665,16 @@ int ampInit() {
 
     op = loadOutputPlugin("plugins/out_wave.dll");
     if (!op) { return 1; }
-
-    ip = loadInputPlugin("plugins/in_mp3.dll",op);
-    ip->SetInfo = UI_SetInfo;
-    if (!ip) { return 1; }
-
-    ip->hMainWindow = h_mainwin;
-    op->hMainWindow = h_mainwin;
-    ip->Init();
     op->Init();
-
+    
+    gf.SetInfo = UI_SetInfo;
+    gf.hMainWindow = h_mainwin;
+    
+    int inputs_c = scanPlugins("plugins");
+    if (!inputs_c) { return 1; }
+    
     return 0;
 }
-
 
 int main (int argc, char** argv) {
 
