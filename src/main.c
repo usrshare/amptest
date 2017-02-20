@@ -42,7 +42,6 @@ int scrollcnt = 0;
 
 #define TIMER_BLANK INT_MIN
 
-/*
    int skinDrawTextScroll(HWND hWnd, const char* text, int x, int y, int w, int scroll, bool noclear) {
 
    const char* cur = text;
@@ -63,7 +62,7 @@ if (r == 0) return 0;
 
 find_utf8char_in_utf8layout(c_cp, text_layout, &c_x, &c_y); 
 
-int cwidth = (c_cp == '@' ? 7 : 5);
+int cwidth = 5;
 
 if (dx >= w) return 0; //if we're already full, end here.
 if ((dx + cwidth) > w) cwidth = w - dx; //cut text length to whatever fits
@@ -81,7 +80,7 @@ cur += r;
 
 } while (r > 0);
 return 0;
-}*/
+}
 
 int skinDrawText(HWND hWnd, const char* text, int x, int y, int w, int skip) {
 
@@ -301,7 +300,7 @@ struct element mw_elements[WE_COUNT] = {
     {  .x = 254, .y = 3, .w = 9,  .h = 9,	.type=ET_BUTTON}, //windowshade
     {  .x = 264, .y = 3, .w = 9,  .h = 9,	.type=ET_BUTTON}, //close
     {  .x = 11, .y = 22, .w = 10, .h = 43,	.type=ET_BUTTON}, //OAIDV -- larger than the assoc. images
-    {  .x = 106, .y = 57, .w = 68, .h = 14,	.type=ET_HSLIDER, .slider_w = 14}, //volume
+    {  .x = 107, .y = 57, .w = 68, .h = 14,	.type=ET_HSLIDER, .slider_w = 14}, //volume
     {  .x = 182, .y = 57, .w = 38, .h = 14,	.type=ET_HSLIDER, .slider_w = 14}, //balance
     {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_BUTTON}, //equalizer btn
     {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_BUTTON}, //playlist btn
@@ -383,8 +382,8 @@ int handleDoubleClickEvents(HWND hWnd) {
 
     switch (get_hover_button()) {
 	case WE_TITLE:
-			exit(0);
-			break;
+	    exit(0);
+	    break;
     }
     return 0;
 }
@@ -452,10 +451,10 @@ int handleClickEvents(HWND hWnd) {
 			break;
 	case WE_B_PAUSE:
 			if (ip) {
-			if (ip->IsPaused())
-			    ip->UnPause();
-			else
-			    ip->Pause();
+			    if (ip->IsPaused())
+				ip->UnPause();
+			    else
+				ip->Pause();
 			}
 			break;
 	case WE_B_STOP:
@@ -469,11 +468,28 @@ int handleClickEvents(HWND hWnd) {
 	case WE_B_SCROLLBAR: {
 				 int len = ip ? ip->GetLength() : 0;
 				 int px = (mw_elements[WE_B_SCROLLBAR].bs - 1);
-				 int wx = mw_elements[WE_B_SCROLLBAR].w - mw_elements[WE_B_SCROLLBAR].slider_w;
+				 int wx = mw_elements[WE_B_SCROLLBAR].w - mw_elements[WE_B_SCROLLBAR].slider_w + 1;
 				 if (px < 0) px=0; if (px > wx) px = wx;
-				 ip->SetOutputTime (len * (px / (double)wx));
+				 if (ip) ip->SetOutputTime (len * (px / (double)wx));
 				 updateScrollbarValue();
 				 break; }
+
+	case WE_B_VOLUME: {
+				 int px = (mw_elements[WE_B_VOLUME].bs - 1);
+				 int wx = mw_elements[WE_B_VOLUME].w - mw_elements[WE_B_VOLUME].slider_w + 1;
+				 if (px < 0) px=0; if (px > wx) px = wx;
+				 int vol = px * 255 / wx;
+				 mw_elements[WE_B_VOLUME].value = px;
+				 if (ip) ip->SetVolume(vol); else op->SetVolume(vol);
+			  break; }
+	case WE_B_BALANCE: {
+				 int px = (mw_elements[WE_B_BALANCE].bs - 1);
+				 int wx = mw_elements[WE_B_BALANCE].w - mw_elements[WE_B_BALANCE].slider_w + 1;
+				 if (px < 0) px=0; if (px > wx) px = wx;
+				 int vol = (px * 255 / wx) - 128;
+				 mw_elements[WE_B_BALANCE].value = px;
+				 if (ip) ip->SetPan(vol); else op->SetPan(vol);
+			  break; }
     }
     return 0;
 }
@@ -681,11 +697,27 @@ void mainWinPaintFunc(HWND hWnd) {
 			      }
 			      break;
 	    case WE_B_VOLUME:
-				  skinBlit(hWnd, skin.volume, 0, 0, cur->x, cur->y, cur->w, cur->h); 
-			    break;
+			      invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
+			      skinBlit(hWnd, skin.volume, 0, 0, cur->x, cur->y, cur->w, cur->h); //background
+
+			      if (cur->bs > 0) { //if currently held
+				  int px = getHSliderValue(cur); 
+				  skinBlit(hWnd, skin.volume, 0, 422, cur->x + px, cur->y + 2, 14, 11); 
+			      } else {
+				  skinBlit(hWnd, skin.volume, 15, 422, cur->x + cur->value, cur->y + 2, 14, 11); 
+			      }
+			      break;
 	    case WE_B_BALANCE:
-				  skinBlit(hWnd, skin.balance, 9, 0, cur->x, cur->y, cur->w, cur->h); 
-			    break;
+			      invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
+			      skinBlit(hWnd, skin.balance, 9, 0, cur->x, cur->y, cur->w, cur->h); 
+			      
+			      if (cur->bs > 0) { //if currently held
+				  int px = getHSliderValue(cur); 
+				  skinBlit(hWnd, skin.balance, 0, 422, cur->x + px, cur->y + 2, 14, 11); 
+			      } else {
+				  skinBlit(hWnd, skin.balance, 15, 422, cur->x + cur->value, cur->y + 2, 14, 11); 
+			      }
+			      break;
 	}
     } while (cur);
     windowBlit(hWnd);
@@ -696,13 +728,13 @@ int ampInit() {
     op = loadOutputPlugin("plugins/out_wave.dll");
     if (!op) { return 1; }
     op->Init();
-    
+
     gf.SetInfo = UI_SetInfo;
     gf.hMainWindow = h_mainwin;
-    
+
     int inputs_c = scanPlugins("plugins");
     if (!inputs_c) { return 1; }
-    
+
     return 0;
 }
 
@@ -716,6 +748,10 @@ int main (int argc, char** argv) {
     // force the initial draw of all elements.
     for (int i=0; i < WE_COUNT; i++ ) {
 	mw_elements[i].bs = 0; mw_elements[i].obs = -1;}
+
+    mw_elements[WE_B_VOLUME].value = mw_elements[WE_B_VOLUME].w - mw_elements[WE_B_VOLUME].slider_w;
+    mw_elements[WE_B_BALANCE].value = (mw_elements[WE_B_BALANCE].w - mw_elements[WE_B_BALANCE].slider_w) / 2;
+
     updateScrollbarValue();
 
     strcpy(filePath,"demo.mp3");
@@ -733,6 +769,7 @@ int main (int argc, char** argv) {
 	.dblclickcb = handleDoubleClickEvents,
     };
 
+
     createMainWindow(&wincb);
 
     skin.mainbitmap = loadSkinBitmap("skin\\main.bmp");
@@ -744,7 +781,7 @@ int main (int argc, char** argv) {
     skin.playpaus = loadSkinBitmap("skin\\playpaus.bmp");
     skin.nums_ex = loadSkinBitmap("skin\\nums_ex.bmp");
     skin.volume = loadSkinBitmap("skin\\volume.bmp");
-   
+
     skin.balance = loadOptSkinBitmap("skin\\balance.bmp");
     if (!skin.balance) skin.balance = skin.volume;
 
