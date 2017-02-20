@@ -344,18 +344,15 @@ int handleHoldEvents(HWND hWnd) {
 	if (e->type == ET_LABEL) continue; //skip label elements
 	if (hover(e->x, e->y, e->w, e->h)) can_drag = 0;
 
-	int newbs;
+	int lhold = hold(e->x,e->y,e->w,e->h,1);
 
-	if (hold(e->x,e->y,e->w,e->h,1)) {
-	    switch(e->type) {
-		case ET_LABEL: newbs = 0; break;
-		case ET_BUTTON: newbs = 1; break;
-		case ET_HSLIDER: newbs = 1 + getHSliderValue(e); break; 
-		case ET_VSLIDER: newbs = 1 + (mouse.Y - e->y); break;
-		case ET_MDBUTTON: break;
-	    }
-	} else newbs = 0;
-	e->bs = newbs;
+	switch(e->type) {
+	    case ET_BUTTON: e->bs = lhold ? 1 : 0; break;
+	    case ET_HSLIDER: e->bs = lhold ? (1 + getHSliderValue(e)) : 0; break; 
+	    case ET_VSLIDER: e->bs = lhold ? (1 + (mouse.Y - e->y) ) : 0; break;
+	    default: break;
+	}
+
 	if (e->bs != e->obs) invalidateXYWH(hWnd,e->x,e->y,e->w,e->h);
     }
     return can_drag;
