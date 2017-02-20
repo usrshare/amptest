@@ -213,17 +213,17 @@ struct element {
 
     unsigned int x,y,w,h; //position
 
-    int obs,bs; //old state and current state. whenever bs != obs, this element
+    int curState,oldState; //old state and current state. whenever they differ, this element
     //is redrawn.
 
     enum element_avail avail; //when is the element available
     enum element_type type;
     //specifies if the element should be treated specially.
     //that means the window can't be dragged by this element,
-    //and that bs can be rewritten if the element is held.
+    //and that curState can be rewritten if the element is held.
 
     int value; //additional value. useful for non-label elements, where
-    //bs can't always hold the useful value.
+    //curState can't always hold the useful value.
 
     elementcb drag_cb;
     elementcb click_cb;
@@ -319,19 +319,19 @@ struct element mw_elements[WE_COUNT] = {
 void UI_SetInfo(int br, int sr, int st, int synch) {
     if (br != -1) {
 	pb.bitrate = br;
-	mw_elements[WE_BITRATE].bs = br;
+	mw_elements[WE_BITRATE].curState = br;
     }
     if (sr != -1) {
 	pb.samplerate = sr;
-	mw_elements[WE_MIXRATE].bs = sr;
+	mw_elements[WE_MIXRATE].curState = sr;
     }
     if (st != -1) {
 	pb.channels = st;
-	mw_elements[WE_MONOSTER].bs = st;
+	mw_elements[WE_MONOSTER].curState = st;
     }
     if (synch != -1) {
 	pb.synched = synch;
-	mw_elements[WE_PLAYPAUS].bs = st ? PS_PLAY_SYNCH : PS_PLAY_NOSYNCH;
+	mw_elements[WE_PLAYPAUS].curState = st ? PS_PLAY_SYNCH : PS_PLAY_NOSYNCH;
     }
 }
 
@@ -347,13 +347,13 @@ int handleHoldEvents(HWND hWnd) {
 	int lhold = hold(e->x,e->y,e->w,e->h,1);
 
 	switch(e->type) {
-	    case ET_BUTTON: e->bs = lhold ? 1 : 0; break;
-	    case ET_HSLIDER: e->bs = lhold ? (1 + getHSliderValue(e)) : 0; break; 
-	    case ET_VSLIDER: e->bs = lhold ? (1 + (mouse.Y - e->y) ) : 0; break;
+	    case ET_BUTTON: e->curState = lhold ? 1 : 0; break;
+	    case ET_HSLIDER: e->curState = lhold ? (1 + getHSliderValue(e)) : 0; break; 
+	    case ET_VSLIDER: e->curState = lhold ? (1 + (mouse.Y - e->y) ) : 0; break;
 	    default: break;
 	}
 
-	if (e->bs != e->obs) invalidateXYWH(hWnd,e->x,e->y,e->w,e->h);
+	if (e->curState != e->oldState) invalidateXYWH(hWnd,e->x,e->y,e->w,e->h);
     }
     return can_drag;
 }
@@ -388,7 +388,7 @@ int handleDoubleClickEvents(HWND hWnd) {
 int find_element_to_update(unsigned int element_c, struct element* element_v, struct element** cur) {
 
     while ((*cur) < (element_v + element_c)) {
-	if ((*cur)->bs != (*cur)->obs) { (*cur)->obs = (*cur)->bs; return (*cur)->bs; }
+	if ((*cur)->curState != (*cur)->oldState) { (*cur)->oldState = (*cur)->curState; return (*cur)->curState; }
 	(*cur)++;
     }
     *cur = NULL;
@@ -429,10 +429,10 @@ int updateScrollbarValue(void) {
 	if (xpos < 0) xpos = 0;
 	if (xpos >= 219) xpos = 219;
 	mw_elements[WE_B_SCROLLBAR].value = xpos;
-	if (mw_elements[WE_B_SCROLLBAR].bs <= 0) mw_elements[WE_B_SCROLLBAR].bs = -1-xpos;
+	if (mw_elements[WE_B_SCROLLBAR].curState <= 0) mw_elements[WE_B_SCROLLBAR].curState = -1-xpos;
     } else { 
 	mw_elements[WE_B_SCROLLBAR].value = -1;
-	if (mw_elements[WE_B_SCROLLBAR].bs <= 0) mw_elements[WE_B_SCROLLBAR].bs = -1;
+	if (mw_elements[WE_B_SCROLLBAR].curState <= 0) mw_elements[WE_B_SCROLLBAR].curState = -1;
     }
     return 0;
 }
@@ -463,7 +463,7 @@ int handleClickEvents(HWND hWnd) {
 			break;
 	case WE_B_SCROLLBAR: {
 				 int len = ip ? ip->GetLength() : 0;
-				 int px = (mw_elements[WE_B_SCROLLBAR].bs - 1);
+				 int px = (mw_elements[WE_B_SCROLLBAR].curState - 1);
 				 int wx = mw_elements[WE_B_SCROLLBAR].w - mw_elements[WE_B_SCROLLBAR].slider_w + 1;
 				 if (px < 0) px=0; if (px > wx) px = wx;
 				 if (ip) ip->SetOutputTime (len * (px / (double)wx));
@@ -471,7 +471,7 @@ int handleClickEvents(HWND hWnd) {
 				 break; }
 
 	case WE_B_VOLUME: {
-				 int px = (mw_elements[WE_B_VOLUME].bs - 1);
+				 int px = (mw_elements[WE_B_VOLUME].curState - 1);
 				 int wx = mw_elements[WE_B_VOLUME].w - mw_elements[WE_B_VOLUME].slider_w + 1;
 				 if (px < 0) px=0; if (px > wx) px = wx;
 				 mw_elements[WE_B_VOLUME].value = px;
@@ -481,7 +481,7 @@ int handleClickEvents(HWND hWnd) {
 				 if (ip) ip->SetVolume(vol); else op->SetVolume(vol);
 			  break; }
 	case WE_B_BALANCE: {
-				 int px = (mw_elements[WE_B_BALANCE].bs - 1);
+				 int px = (mw_elements[WE_B_BALANCE].curState - 1);
 				 int wx = mw_elements[WE_B_BALANCE].w - mw_elements[WE_B_BALANCE].slider_w + 1;
 				 if (px < 0) px=0; if (px > wx) px = wx;
 				 mw_elements[WE_B_BALANCE].value = px;
@@ -503,26 +503,26 @@ void mainWinTimerFunc(HWND hWnd) {
 
     if ( (ip) && (op->IsPlaying()) ) {
 	if ((timercnt % 5) == 0) scrollcnt++; 
-	mw_elements[WE_TITLE].bs = 1 + scrollcnt;
-	if (ip->IsPaused()) { mw_elements[WE_PLAYPAUS].bs = PS_PAUSE; }
-	mw_elements[WE_TIMER].bs = (ip->IsPaused() && (timercnt % 20 >= 10)) ? TIMER_BLANK : (ip->GetOutputTime() / 1000);
+	mw_elements[WE_TITLE].curState = 1 + scrollcnt;
+	if (ip->IsPaused()) { mw_elements[WE_PLAYPAUS].curState = PS_PAUSE; }
+	mw_elements[WE_TIMER].curState = (ip->IsPaused() && (timercnt % 20 >= 10)) ? TIMER_BLANK : (ip->GetOutputTime() / 1000);
     } else {
 	scrollcnt = 0;
-	mw_elements[WE_TITLE].bs = 0;
-	mw_elements[WE_MONOSTER].bs = 0; //remove both mono and stereo
-	mw_elements[WE_PLAYPAUS].bs = PS_STOP;
-	mw_elements[WE_TIMER].bs = TIMER_BLANK;
+	mw_elements[WE_TITLE].curState = 0;
+	mw_elements[WE_MONOSTER].curState = 0; //remove both mono and stereo
+	mw_elements[WE_PLAYPAUS].curState = PS_STOP;
+	mw_elements[WE_TIMER].curState = TIMER_BLANK;
     }
 
     for (int i=0; i < WE_COUNT; i++) {
 	struct element* e = &mw_elements[i];
-	if (e->bs != e->obs) invalidateXYWH(h_mainwin,e->x,e->y,e->w,e->h);
+	if (e->curState != e->oldState) invalidateXYWH(h_mainwin,e->x,e->y,e->w,e->h);
     }
 }
 
 void mainWinFocusFunc(HWND hWnd, int focused) {
-    mw_elements[WE_TITLEBAR].bs = focused;
-    //if (mw_elements[WE_TITLEBAR].bs != mw_elements[WE_TITLEBAR].obs) InvalidateRect(hWnd,&mainTitleRect,0);
+    mw_elements[WE_TITLEBAR].curState = focused;
+    //if (mw_elements[WE_TITLEBAR].curState != mw_elements[WE_TITLEBAR].oldState) InvalidateRect(hWnd,&mainTitleRect,0);
 }
 
 void mainWinMenuFunc(HWND hWnd, int menuid) {
@@ -568,10 +568,10 @@ void mainWinPaintFunc(HWND hWnd) {
 		break;
 	    case WE_TITLEBAR:
 		invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
-		skinBlit(hWnd, skin.titlebitmap, 27, cur->bs ? 0 : 15, 0, 0, 275, 14);
+		skinBlit(hWnd, skin.titlebitmap, 27, cur->curState ? 0 : 15, 0, 0, 275, 14);
 		break;
 	    case WE_PLAYPAUS: {
-				  switch(cur->bs) {
+				  switch(cur->curState) {
 				      case PS_STOP:
 					  skinBlit(hWnd, skin.mainbitmap, cur->x, cur->y, cur->x, cur->y, 2, 9);
 					  skinBlit(hWnd, skin.playpaus, 18, 0, cur->x + 2, cur->y,9, 9);
@@ -593,10 +593,10 @@ void mainWinPaintFunc(HWND hWnd) {
 			      }
 			      break;
 	    case WE_TIMER: {
-			       if ((!ip) || (cur->bs == TIMER_BLANK)) {
+			       if ((!ip) || (cur->curState == TIMER_BLANK)) {
 				   skinDrawTimeString(hWnd, "     ", cur->x, cur->y);
 			       } else {
-				   skinDrawTime(hWnd, cur->bs, cur->x, cur->y);
+				   skinDrawTime(hWnd, cur->curState, cur->x, cur->y);
 			       }
 			       break; }
 	    case WE_TITLE: {
@@ -684,7 +684,7 @@ void mainWinPaintFunc(HWND hWnd) {
 			      if (mw_elements[WE_B_SCROLLBAR].value >= 0) {
 				  skinBlit(hWnd, skin.posbar, 0, 0, cur->x, cur->y, 248, 10);
 
-				  if (cur->bs > 0) {
+				  if (cur->curState > 0) {
 				      int px = getHSliderValue(cur); 
 				      skinBlit(hWnd, skin.posbar, 278, 0, cur->x + px, cur->y, 29, 10); 
 
@@ -700,7 +700,7 @@ void mainWinPaintFunc(HWND hWnd) {
 			      invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
 			      skinBlit(hWnd, skin.volume, 0, 0, cur->x, cur->y, cur->w, cur->h); //background
 
-			      if (cur->bs > 0) { //if currently held
+			      if (cur->curState > 0) { //if currently held
 				  int px = getHSliderValue(cur); 
 				  skinBlit(hWnd, skin.volume, 0, 422, cur->x + px, cur->y + 2, 14, 11); 
 			      } else {
@@ -711,7 +711,7 @@ void mainWinPaintFunc(HWND hWnd) {
 			      invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
 			      skinBlit(hWnd, skin.balance, 9, 0, cur->x, cur->y, cur->w, cur->h); 
 			      
-			      if (cur->bs > 0) { //if currently held
+			      if (cur->curState > 0) { //if currently held
 				  int px = getHSliderValue(cur); 
 				  skinBlit(hWnd, skin.balance, 0, 422, cur->x + px, cur->y + 2, 14, 11); 
 			      } else {
@@ -747,7 +747,7 @@ int main (int argc, char** argv) {
 
     // force the initial draw of all elements.
     for (int i=0; i < WE_COUNT; i++ ) {
-	mw_elements[i].bs = 0; mw_elements[i].obs = -1;}
+	mw_elements[i].curState = 0; mw_elements[i].oldState = -1;}
 
     mw_elements[WE_B_VOLUME].value = mw_elements[WE_B_VOLUME].w - mw_elements[WE_B_VOLUME].slider_w;
     mw_elements[WE_B_BALANCE].value = (mw_elements[WE_B_BALANCE].w - mw_elements[WE_B_BALANCE].slider_w) / 2;
