@@ -33,6 +33,9 @@ struct playbackData {
     int samplerate;
     int channels;
     int synched;
+
+    int volume; // 0 ~ 255
+    int balance; // -128 ~ 127
 } pb;
 
 bool doubleMode = false;
@@ -440,7 +443,6 @@ int updateScrollbarValue(void) {
     return 0;
 }
 
-
 int handleClickEvents(HWND hWnd) {
 
     switch (get_click_button()) {
@@ -478,17 +480,21 @@ int handleClickEvents(HWND hWnd) {
 				 int px = (mw_elements[WE_B_VOLUME].bs - 1);
 				 int wx = mw_elements[WE_B_VOLUME].w - mw_elements[WE_B_VOLUME].slider_w + 1;
 				 if (px < 0) px=0; if (px > wx) px = wx;
-				 int vol = px * 255 / wx;
 				 mw_elements[WE_B_VOLUME].value = px;
+				 
+				 int vol = px * 255 / wx;
+				 pb.volume = vol;
 				 if (ip) ip->SetVolume(vol); else op->SetVolume(vol);
 			  break; }
 	case WE_B_BALANCE: {
 				 int px = (mw_elements[WE_B_BALANCE].bs - 1);
 				 int wx = mw_elements[WE_B_BALANCE].w - mw_elements[WE_B_BALANCE].slider_w + 1;
 				 if (px < 0) px=0; if (px > wx) px = wx;
-				 int vol = (px * 255 / wx) - 128;
 				 mw_elements[WE_B_BALANCE].value = px;
-				 if (ip) ip->SetPan(vol); else op->SetPan(vol);
+				 
+				 int bal = (px * 255 / wx) - 128;
+				 pb.balance = bal;
+				 if (ip) ip->SetPan(bal); else op->SetPan(bal);
 			  break; }
     }
     return 0;
