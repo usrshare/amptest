@@ -221,7 +221,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 
-WNDCLASS mainwin = {0,(WNDPROC)WindowProc,0,sizeof (void*),NULL,NULL,NULL,(HBRUSH) COLOR_BTNFACE+1,NULL,"helloMain"};
+WNDCLASS mainwin = {CS_DBLCLKS,(WNDPROC)WindowProc,0,sizeof (void*),NULL,NULL,NULL,(HBRUSH) COLOR_BTNFACE+1,NULL,"helloMain"};
 
 int initMainMenu (void) {
     h_mainmenu = LoadMenu(mainwin.hInstance, MAKEINTRESOURCE(IDM_MAINMENU) );

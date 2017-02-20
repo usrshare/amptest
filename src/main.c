@@ -342,7 +342,6 @@ int handleHoldEvents(HWND hWnd) {
     for (int i=0; i < WE_COUNT; i++) {
 	struct element* e = &mw_elements[i];
 	if (e->type == ET_LABEL) continue; //skip label elements
-	if (e->type == ET_MDBUTTON) continue; //skip label elements
 	if (hover(e->x, e->y, e->w, e->h)) can_drag = 0;
 
 	int newbs;
@@ -381,11 +380,9 @@ int get_click_button() {
 }
 
 int handleDoubleClickEvents(HWND hWnd) {
-    printf("dblclk %d,%d\n",mouse.X,mouse.Y);
-
     switch (get_hover_button()) {
 	case WE_TITLE:
-	    exit(0);
+	    if (ip) ip->InfoBox(filePath,hWnd);
 	    break;
     }
     return 0;
