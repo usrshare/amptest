@@ -175,8 +175,6 @@ int click(short x, short y, short w, short h, short bmask) {
 	    (mouse.X >= x) && (mouse.X < (x+w)) &&
 	    (mouse.Y >= y) && (mouse.Y < (y+h)) && 
 	    (mouse.buttons & bmask) ) {
-
-	mouse.clickX = -1; mouse.clickY = -1;
 	return 1;
     }
     return 0;
@@ -367,13 +365,25 @@ int get_hover_button() {
     return -1;
 }
 
-int get_click_button() {
+struct element* get_rclick_button() {
+    //returns last element that follows. this means generic elements, like window backgrounds and title bars, should be first.
+
+    struct element* res = NULL;
+
+    for (int i=0; i < WE_COUNT; i++) {
+	struct element* e = &mw_elements[i];
+	if (click(e->x,e->y,e->w,e->h,UIMB_RIGHT)) res = e;
+    }
+    return res;
+}
+
+struct element* get_click_button() {
     for (int i=0; i < WE_COUNT; i++) {
 	struct element* e = &mw_elements[i];
 	if (e->type == ET_LABEL) continue; //skip label elements
-	if (click(e->x,e->y,e->w,e->h,1)) return i;
+	if (click(e->x,e->y,e->w,e->h,UIMB_LEFT)) return e;
     }
-    return -1;
+    return NULL;
 }
 
 int handleDoubleClickEvents(HWND hWnd) {
@@ -439,8 +449,13 @@ int updateScrollbarValue(void) {
 
 int handleClickEvents(HWND hWnd) {
 
-    switch (get_click_button()) {
-	case WE_B_MENU: showSystemMenu(hWnd, 0, 6, 12);
+    struct element* cur = get_click_button();
+    if (!cur) return 0;
+    
+    int curind = cur - mw_elements;
+
+    switch (curind) {
+	case WE_B_MENU: showSystemMenu(hWnd, 0, cur->x + 3, cur->y + 9);
 			break;
 	case WE_B_CLOSE:
 			exit(0);
@@ -462,29 +477,26 @@ int handleClickEvents(HWND hWnd) {
 			filePlay();
 			break;
 	case WE_B_SCROLLBAR: {
+				 int px = cur->curState - 1;
+				 int wx = cur->w - cur->slider_w + 1;
 				 int len = ip ? ip->GetLength() : 0;
-				 int px = (mw_elements[WE_B_SCROLLBAR].curState - 1);
-				 int wx = mw_elements[WE_B_SCROLLBAR].w - mw_elements[WE_B_SCROLLBAR].slider_w + 1;
-				 if (px < 0) px=0; if (px > wx) px = wx;
 				 if (ip) ip->SetOutputTime (len * (px / (double)wx));
 				 updateScrollbarValue();
 				 break; }
 
 	case WE_B_VOLUME: {
-				 int px = (mw_elements[WE_B_VOLUME].curState - 1);
-				 int wx = mw_elements[WE_B_VOLUME].w - mw_elements[WE_B_VOLUME].slider_w + 1;
-				 if (px < 0) px=0; if (px > wx) px = wx;
-				 mw_elements[WE_B_VOLUME].value = px;
+				 int px = (cur->curState - 1);
+				 cur->value = px;
+				 int wx = cur->w - cur->slider_w + 1;
 				 
 				 int vol = px * 255 / wx;
 				 pb.volume = vol;
 				 if (ip) ip->SetVolume(vol); else op->SetVolume(vol);
 			  break; }
 	case WE_B_BALANCE: {
-				 int px = (mw_elements[WE_B_BALANCE].curState - 1);
-				 int wx = mw_elements[WE_B_BALANCE].w - mw_elements[WE_B_BALANCE].slider_w + 1;
-				 if (px < 0) px=0; if (px > wx) px = wx;
-				 mw_elements[WE_B_BALANCE].value = px;
+				 int px = (cur->curState - 1);
+				 cur->value = px;
+				 int wx = cur->w - cur->slider_w + 1;
 				 
 				 int bal = (px * 255 / wx) - 128;
 				 pb.balance = bal;
@@ -492,6 +504,16 @@ int handleClickEvents(HWND hWnd) {
 			  break; }
     }
     return 0;
+}
+
+int handleRightClickEvents(HWND hWnd) {
+
+    struct element* cur = get_rclick_button();
+    if (!cur) return 0;
+
+    int curind = cur - mw_elements;
+    switch(curind) {
+    }
 }
 
 void mainWinTimerFunc(HWND hWnd) {
@@ -767,6 +789,7 @@ int main (int argc, char** argv) {
 	.holdcb = handleHoldEvents,
 	.clickcb = handleClickEvents,
 	.dblclickcb = handleDoubleClickEvents,
+	.rightclickcb = handleRightClickEvents,
     };
 
 

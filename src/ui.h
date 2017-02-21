@@ -1,3 +1,4 @@
+// vim: cin:sts=4:sw=4
 #ifndef UI_H
 #define UI_H
 #include <stdint.h>
@@ -13,7 +14,21 @@ struct windowCallbacks {
 
     int (*holdcb)(HWND hWnd); // int returns if window can be dragged by this part
     int (*clickcb)(HWND hWnd);
+    int (*rightclickcb)(HWND hWnd);
+    int (*wheelcb)(HWND hWnd);
     int (*dblclickcb)(HWND hWnd);
+};
+
+enum mouse_buttons {
+    UIMB_LEFT = 1,
+    UIMB_MIDDLE = 2,
+    UIMB_RIGHT = 4,
+}; //I wanted to call them MB_*, but MB_RIGHT was taken by MessageBox
+
+enum mouse_wheel {
+    MW_NONE = 0,
+    MW_UP = 1,
+    MW_DOWN = 2,
 };
 
 struct mouseData {
@@ -23,6 +38,7 @@ struct mouseData {
     short clickX; //last click position
     short clickY;
     short buttons; //buttons held
+    short wheel; //wheel status
 };
 
 extern struct mouseData mouse;
@@ -50,10 +66,10 @@ int createMainWindow(struct windowCallbacks* wincb);
 int windowLoop(void);
 
 enum uiMessageBoxType {
-	UIMB_INFO = 0,
-	UIMB_WARNING,
-	UIMB_ERROR,
-	UIMB_COUNT
+    UIMB_INFO = 0,
+    UIMB_WARNING,
+    UIMB_ERROR,
+    UIMB_COUNT
 };
 
 int uiOKMessageBox(HWND parenthWnd, const char* text, const char* title, int type);
