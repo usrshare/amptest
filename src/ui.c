@@ -186,20 +186,49 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			   if (wdata->cb.holdcb) wdata->cb.holdcb(hWnd);
 			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
 	case WM_LBUTTONUP:
+			   if ((mouse.buttons & UIMB_LEFT)) {
 			   mouse.hWnd = hWnd;
 			   mouse.X = LOWORD(lParam);
 			   mouse.Y = HIWORD(lParam);
 			   //handle all the "click" events here.
 			   if (wdata->cb.clickcb) wdata->cb.clickcb(hWnd);
-			   mouse.buttons &= (~1);
-			   if (wdata->cb.holdcb) wdata->cb.holdcb(hWnd);
+			   mouse.buttons &= (~UIMB_LEFT);
+			   if (wdata->cb.holdcb) wdata->cb.holdcb(hWnd); }
 			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
 	case WM_LBUTTONDBLCLK:
 			   mouse.hWnd = hWnd;
 			   mouse.X = LOWORD(lParam);
 			   mouse.Y = HIWORD(lParam);
 			   if (wdata->cb.dblclickcb) wdata->cb.dblclickcb(hWnd);
-			   mouse.buttons &= (~1);
+			   mouse.buttons &= (~UIMB_LEFT);
+			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
+	case WM_RBUTTONDOWN:
+			   //record press location for "pushed down" buttons.
+			   mouse.hWnd = hWnd;
+			   mouse.clickX = LOWORD(lParam);
+			   mouse.clickY = HIWORD(lParam);
+			   mouse.buttons |= UIMB_RIGHT;
+			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
+	case WM_RBUTTONUP:
+			   if ((mouse.buttons & UIMB_RIGHT)) {
+			   mouse.hWnd = hWnd;
+			   mouse.X = LOWORD(lParam);
+			   mouse.Y = HIWORD(lParam);
+			   //handle all the "right click" events here.
+			   if (wdata->cb.rightclickcb) wdata->cb.rightclickcb(hWnd);
+			   mouse.buttons &= (~UIMB_RIGHT); }
+			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
+	case WM_MOUSEWHEEL:
+			   
+			   mouse.X = LOWORD(lParam);
+			   mouse.Y = HIWORD(lParam);
+			   int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+
+			   if (zDelta == 0) 
+			       mouse.wheel = MW_NONE; 
+			   else if (zDelta > 0) mouse.wheel = MW_UP;
+			   else mouse.wheel = MW_DOWN;
+
 			   return DefWindowProc(hWnd,uMsg,wParam,lParam);
 	case WM_MOUSEMOVE:
 			   mouse.hWnd = hWnd;
@@ -223,7 +252,7 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 
-WNDCLASS mainwin = {0,(WNDPROC)WindowProc,0,sizeof (void*),NULL,NULL,NULL,(HBRUSH) COLOR_BTNFACE+1,NULL,"helloMain"};
+WNDCLASS mainwin = {CS_DBLCLKS,(WNDPROC)WindowProc,0,sizeof (void*),NULL,NULL,NULL,(HBRUSH) COLOR_BTNFACE+1,NULL,"helloMain"};
 
 int initMainMenu (void) {
     h_mainmenu = LoadMenu(mainwin.hInstance, MAKEINTRESOURCE(IDM_MAINMENU) );
