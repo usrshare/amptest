@@ -1,6 +1,8 @@
 // vim: cin:sts=4:sw=4
 #include <windows.h>
+#ifdef __GNUC__
 #include <commctrl.h>
+#endif
 #include <stdio.h>
 #include "ui.h"
 #include "win_misc.h"

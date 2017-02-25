@@ -470,7 +470,8 @@ int handleClickEvents(HWND hWnd) {
 				 int len = ip ? ip->GetLength() : 0;
 				 int px = (mw_elements[WE_B_SCROLLBAR].bs - 1);
 				 int wx = mw_elements[WE_B_SCROLLBAR].w - mw_elements[WE_B_SCROLLBAR].slider_w;
-				 if (px < 0) px=0; if (px > wx) px = wx;
+				 if (px < 0) px=0;
+				 if (px > wx) px = wx;
 				 ip->SetOutputTime (len * (px / (double)wx));
 				 updateScrollbarValue();
 				 break; }
