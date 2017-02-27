@@ -26,6 +26,8 @@ struct skinData {
     HBITMAP nums_ex;
     HBITMAP volume;
     HBITMAP balance;
+    HBITMAP pledit;
+    HBITMAP shufrep;
 } skin;
 
 struct playbackData {
@@ -45,44 +47,44 @@ int scrollcnt = 0;
 
 #define TIMER_BLANK INT_MIN
 
-   int skinDrawTextScroll(HWND hWnd, const char* text, int x, int y, int w, int scroll, bool noclear) {
+int skinDrawTextScroll(HWND hWnd, const char* text, int x, int y, int w, int scroll, bool noclear) {
 
-   const char* cur = text;
-   int c_x = 0, c_y = 0, r = 0;
-   unsigned int c_cp = 0;
+    const char* cur = text;
+    int c_x = 0, c_y = 0, r = 0;
+    unsigned int c_cp = 0;
 
-   int dx= -scroll;
+    int dx= -scroll;
 
-   if (!noclear) {
-   for (int ix=0; ix < (w / 5); ix++) 
-   skinBlit(hWnd, skin.text, 150,0,x+(ix*5),y,5,6); //tile with empty space
-   }
+    if (!noclear) {
+	for (int ix=0; ix < (w / 5); ix++) 
+	    skinBlit(hWnd, skin.text, 150,0,x+(ix*5),y,5,6); //tile with empty space
+    }
 
-   do {
-   r = iterate_utf8_codepoint(cur,&c_cp);
-//printf("Character '%.*s' (%db) has a code %d\n",r,cur,r,c_cp);
-if (r == 0) return 0;
+    do {
+	r = iterate_utf8_codepoint(cur,&c_cp);
+	//printf("Character '%.*s' (%db) has a code %d\n",r,cur,r,c_cp);
+	if (r == 0) return 0;
 
-find_utf8char_in_utf8layout(c_cp, text_layout, &c_x, &c_y); 
+	find_utf8char_in_utf8layout(c_cp, text_layout, &c_x, &c_y); 
 
-int cwidth = 5;
+	int cwidth = 5;
 
-if (dx >= w) return 0; //if we're already full, end here.
-if ((dx + cwidth) > w) cwidth = w - dx; //cut text length to whatever fits
+	if (dx >= w) return 0; //if we're already full, end here.
+	if ((dx + cwidth) > w) cwidth = w - dx; //cut text length to whatever fits
 
-if ((dx + cwidth) > 0) { //if this character is at least partially visible,
+	if ((dx + cwidth) > 0) { //if this character is at least partially visible,
 
-int xsh = (dx < 0 ? -dx : 0);
+	    int xsh = (dx < 0 ? -dx : 0);
 
-skinBlit(hWnd, skin.text, (c_x*5) + xsh, c_y*6, x + dx + xsh, y, cwidth - xsh, 6);
-// if dx < 0, then that means this character should be only blitted partially.
-}
+	    skinBlit(hWnd, skin.text, (c_x*5) + xsh, c_y*6, x + dx + xsh, y, cwidth - xsh, 6);
+	    // if dx < 0, then that means this character should be only blitted partially.
+	}
 
-dx += (c_cp == '@' ? 7 : 5);
-cur += r;
+	dx += (c_cp == '@' ? 7 : 5);
+	cur += r;
 
-} while (r > 0);
-return 0;
+    } while (r > 0);
+    return 0;
 }
 
 int skinDrawText(HWND hWnd, const char* text, int x, int y, int w, int skip) {
@@ -149,15 +151,16 @@ int skinDrawTime(HWND hWnd, int time, int x, int y) {
     return skinDrawTimeString(hWnd,text,x,y);
 }
 
-int hover(short x, short y, short w, short h) {
+int hover(HWND hWnd, short x, short y, short w, short h) {
 
-    if ((mouse.X >= x) && (mouse.X < (x+w)) &&
+    if ((mouse.hWnd == hWnd) && (mouse.X >= x) && (mouse.X < (x+w)) &&
 	    (mouse.Y >= y) && (mouse.Y < (y+h))) return 1; else return 0;
 }
 
-int hold(short x, short y, short w, short h, short bmask) {
+int hold(HWND hWnd, short x, short y, short w, short h, short bmask) {
 
-    if ( (mouse.clickX >= x) && (mouse.clickX < (x+w)) &&
+    if ( (mouse.hWnd == hWnd) &&
+	    (mouse.clickX >= x) && (mouse.clickX < (x+w)) &&
 	    (mouse.clickY >= y) && (mouse.clickY < (y+h)) &&
 	    (mouse.X >= x) && (mouse.X < (x+w)) &&
 	    (mouse.Y >= y) && (mouse.Y < (y+h)) &&
@@ -168,9 +171,10 @@ int hold(short x, short y, short w, short h, short bmask) {
     return 0;
 }
 
-int click(short x, short y, short w, short h, short bmask) {
+int click(HWND hWnd, short x, short y, short w, short h, short bmask) {
 
-    if ( (mouse.clickX >= x) && (mouse.clickX < (x+w)) &&
+    if ( (mouse.hWnd == hWnd) &&
+	    (mouse.clickX >= x) && (mouse.clickX < (x+w)) &&
 	    (mouse.clickY >= y) && (mouse.clickY < (y+h)) &&
 	    (mouse.X >= x) && (mouse.X < (x+w)) &&
 	    (mouse.Y >= y) && (mouse.Y < (y+h)) && 
@@ -275,8 +279,16 @@ enum windowelements {
     WE_B_STOP,
     WE_B_NEXT,
     WE_B_OPEN,
-    WE_B_SHUFFLE,
-    WE_B_REPEAT,
+    //WE_B_SHUFFLE,
+    //WE_B_REPEAT,
+
+    WE_P_TOP,
+    WE_P_LEFT,
+    WE_P_RIGHT,
+    WE_P_BOTTOM,
+    WE_P_B_WINDOWSHADE,
+    WE_P_B_CLOSE,
+
     WE_COUNT
 };
 
@@ -288,6 +300,13 @@ enum PLAYPAUS_STATUS {
 };
 
 struct element mw_elements[WE_COUNT] = {
+
+    //for purposes of the UI functions, a negative X or Y means
+    //that the item is abs(x) pixels away from the bottom or right
+    //border.
+
+    //a negative W or H means the item's width or height is 
+
     {  .x = 0,   .y = 0, .w = 275, .h = 116}, //window background
     {  .x = 0,   .y = 0, .w = 275,  .h = 14}, //titlebar
     {  .x = 24,  .y = 28,.w =  11,  .h = 9},  //play/pause indicator
@@ -304,8 +323,8 @@ struct element mw_elements[WE_COUNT] = {
     {  .x = 11, .y = 22, .w = 10, .h = 43,	.type=ET_BUTTON}, //OAIDV -- larger than the assoc. images
     {  .x = 107, .y = 57, .w = 68, .h = 14,	.type=ET_HSLIDER, .slider_w = 14}, //volume
     {  .x = 182, .y = 57, .w = 38, .h = 14,	.type=ET_HSLIDER, .slider_w = 14}, //balance
-    {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_BUTTON}, //equalizer btn
-    {  .x = 999, .y = 999, .w = 0, .h = 0,	.type=ET_BUTTON}, //playlist btn
+    {  .x = 219, .y = 58, .w = 23, .h = 12,	.type=ET_BUTTON}, //equalizer btn
+    {  .x = 242, .y = 58, .w = 23, .h = 12,	.type=ET_BUTTON}, //playlist btn
     {  .x = 16, .y = 72, .w = 248, .h = 10,	.type=ET_HSLIDER, .slider_w = 28}, //scroll bar
     {  .x = 16, .y = 88, .w = 23, .h = 18,	.type=ET_BUTTON}, //prev
     {  .x = 39, .y = 88, .w = 23, .h = 18,	.type=ET_BUTTON}, //play
@@ -313,6 +332,12 @@ struct element mw_elements[WE_COUNT] = {
     {  .x = 85, .y = 88, .w = 23, .h = 18,	.type=ET_BUTTON}, //stop
     {  .x = 108, .y = 88, .w = 22, .h = 18,	.type=ET_BUTTON}, //next
     {  .x = 136, .y = 89, .w = 22, .h = 16,	.type=ET_BUTTON}, //open
+
+    //playlist elements
+    {  .win = W_PLAYLIST, .x = 0, .y = 0, .w = -1, .h = 20}, //playlist top
+    {  .win = W_PLAYLIST, .x = 0, .y = 20, .w = 25, .h = -39}, //playlist left
+    {  .win = W_PLAYLIST, .x = -25, .y = 20, .w = 25, .h = -39}, //playlist right
+    {  .win = W_PLAYLIST, .x = 0, .y = -38, .w = -1, .h = -1}, //playlist bottom
 };
 
 void UI_SetInfo(int br, int sr, int st, int synch) {
@@ -340,10 +365,11 @@ int handleHoldEvents(HWND hWnd) {
 
     for (int i=0; i < WE_COUNT; i++) {
 	struct element* e = &mw_elements[i];
+	if (h_window[e->win] != hWnd) continue;
 	if (e->type == ET_LABEL) continue; //skip label elements
-	if (hover(e->x, e->y, e->w, e->h)) can_drag = 0;
+	if (hover(hWnd, e->x, e->y, e->w, e->h)) can_drag = 0;
 
-	int lhold = hold(e->x,e->y,e->w,e->h,1);
+	int lhold = hold(hWnd, e->x,e->y,e->w,e->h,1);
 
 	switch(e->type) {
 	    case ET_BUTTON: e->curState = lhold ? 1 : 0; break;
@@ -357,38 +383,41 @@ int handleHoldEvents(HWND hWnd) {
     return can_drag;
 }
 
-int get_hover_button() {
+int get_hover_button(HWND hWnd) {
     for (int i=0; i < WE_COUNT; i++) {
 	struct element* e = &mw_elements[i];
+	if (h_window[e->win] != hWnd) continue;
 	if (e->type == ET_LABEL) continue; //skip label elements
-	if (hover(e->x,e->y,e->w,e->h)) return i;
+	if (hover(hWnd, e->x,e->y,e->w,e->h)) return i;
     }
     return -1;
 }
 
-struct element* get_rclick_button() {
+struct element* get_rclick_button(HWND hWnd) {
     //returns last element that follows. this means generic elements, like window backgrounds and title bars, should be first.
 
     struct element* res = NULL;
 
     for (int i=0; i < WE_COUNT; i++) {
 	struct element* e = &mw_elements[i];
-	if (click(e->x,e->y,e->w,e->h,UIMB_RIGHT)) res = e;
+	if (h_window[e->win] != hWnd) continue;
+	if (click(hWnd,e->x,e->y,e->w,e->h,UIMB_RIGHT)) res = e;
     }
     return res;
 }
 
-struct element* get_click_button() {
+struct element* get_click_button(HWND hWnd) {
     for (int i=0; i < WE_COUNT; i++) {
 	struct element* e = &mw_elements[i];
+	if (h_window[e->win] != hWnd) continue;
 	if (e->type == ET_LABEL) continue; //skip label elements
-	if (click(e->x,e->y,e->w,e->h,UIMB_LEFT)) return e;
+	if (click(hWnd,e->x,e->y,e->w,e->h,UIMB_LEFT)) return e;
     }
     return NULL;
 }
 
 int handleDoubleClickEvents(HWND hWnd) {
-    switch (get_hover_button()) {
+    switch (get_hover_button(hWnd)) {
 	case WE_TITLE:
 	    if (ip) ip->InfoBox(filePath,hWnd);
 	    break;
@@ -454,9 +483,9 @@ int updateScrollbarValue(void) {
 
 int handleClickEvents(HWND hWnd) {
 
-    struct element* cur = get_click_button();
+    struct element* cur = get_click_button(hWnd);
     if (!cur) return 0;
-    
+
     int curind = cur - mw_elements;
 
     switch (curind) {
@@ -492,30 +521,30 @@ int handleClickEvents(HWND hWnd) {
 				 break; }
 
 	case WE_B_VOLUME: {
-				 int px = (cur->curState - 1);
-				 cur->value = px;
-				 int wx = cur->w - cur->slider_w + 1;
-				 
-				 int vol = px * 255 / wx;
-				 pb.volume = vol;
-				 if (ip) ip->SetVolume(vol); else op->SetVolume(vol);
-			  break; }
+			      int px = (cur->curState - 1);
+			      cur->value = px;
+			      int wx = cur->w - cur->slider_w + 1;
+
+			      int vol = px * 255 / wx;
+			      pb.volume = vol;
+			      if (ip) ip->SetVolume(vol); else op->SetVolume(vol);
+			      break; }
 	case WE_B_BALANCE: {
-				 int px = (cur->curState - 1);
-				 cur->value = px;
-				 int wx = cur->w - cur->slider_w + 1;
-				 
-				 int bal = (px * 255 / wx) - 128;
-				 pb.balance = bal;
-				 if (ip) ip->SetPan(bal); else op->SetPan(bal);
-			  break; }
+			       int px = (cur->curState - 1);
+			       cur->value = px;
+			       int wx = cur->w - cur->slider_w + 1;
+
+			       int bal = (px * 255 / wx) - 128;
+			       pb.balance = bal;
+			       if (ip) ip->SetPan(bal); else op->SetPan(bal);
+			       break; }
     }
     return 0;
 }
 
 int handleRightClickEvents(HWND hWnd) {
 
-    struct element* cur = get_rclick_button();
+    struct element* cur = get_rclick_button(hWnd);
     if (!cur) return 0;
 
     int curind = cur - mw_elements;
@@ -551,8 +580,9 @@ void mainWinTimerFunc(HWND hWnd) {
 }
 
 void mainWinFocusFunc(HWND hWnd, int focused) {
-    mw_elements[WE_TITLEBAR].curState = focused;
-    //if (mw_elements[WE_TITLEBAR].curState != mw_elements[WE_TITLEBAR].oldState) InvalidateRect(hWnd,&mainTitleRect,0);
+    if (hWnd == h_window[W_MAIN]) mw_elements[WE_TITLEBAR].curState = focused;
+
+    if (hWnd == h_window[W_PLAYLIST]) mw_elements[WE_P_TOP].curState = focused;
 }
 
 void mainWinMenuFunc(HWND hWnd, int menuid) {
@@ -740,7 +770,7 @@ void mainWinPaintFunc(HWND hWnd) {
 	    case WE_B_BALANCE:
 			      invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
 			      skinBlit(hWnd, skin.balance, 9, 0, cur->x, cur->y, cur->w, cur->h); 
-			      
+
 			      if (cur->curState > 0) { //if currently held
 				  int px = getHSliderValue(cur); 
 				  skinBlit(hWnd, skin.balance, 0, 422, cur->x + px, cur->y + 2, 14, 11); 
@@ -748,6 +778,70 @@ void mainWinPaintFunc(HWND hWnd) {
 				  skinBlit(hWnd, skin.balance, 15, 422, cur->x + cur->value, cur->y + 2, 14, 11); 
 			      }
 			      break;
+	    case WE_B_EQ:
+			      skinBlit(hWnd, skin.shufrep, 0 + (i ? 46 : 0), cur->value ? 73 : 61, cur->x,cur->y,cur->w,cur->h);
+			      break;
+	    case WE_B_PL:
+			      skinBlit(hWnd, skin.shufrep, 23 + (i ? 46 : 0), cur->value ? 73 : 61, cur->x,cur->y,cur->w,cur->h);
+			      break; 
+
+			      //playlist
+	    case WE_P_TOP: {
+			       unsigned int w,h; getWindowSize(hWnd, &w, &h);
+
+			       int leftPad = (w - 150) / 2;
+			       int rightPad = (w - 150) - leftPad;
+
+			       int skin_y = cur->curState ? 0 : 21;
+
+			       int centerPos = 25 + leftPad;
+
+			       skinBlit(hWnd, skin.pledit, 0, skin_y, 0, 0, 25, 20);
+			       skinBlit(hWnd, skin.pledit, 153, skin_y, -25, 0, 25, 20);
+
+			       skinBlit(hWnd, skin.pledit, 26, skin_y, centerPos, 0, 100, 20);
+
+			       int ix=0;
+
+			       ix = 25;
+			       while (leftPad > 0) {
+				   skinBlit(hWnd, skin.pledit, 127, skin_y, ix, 0, leftPad >= 25 ? 25 : leftPad, 20);
+				   ix += 25; leftPad -= 25;
+			       }
+
+			       ix = centerPos+100;
+			       while (rightPad > 0) {
+				   skinBlit(hWnd, skin.pledit, 127, skin_y, ix, 0, rightPad >= 25 ? 25 : rightPad, 20);
+				   ix += 25; rightPad -= 25;
+			       }
+			       break; }
+	    case WE_P_LEFT: {
+				unsigned int w,h; getWindowSize(hWnd, &w, &h);
+
+			       int iy = 20, ih = h - 20 - 38;
+			       while (ih > 0) {
+				   skinBlit(hWnd, skin.pledit, 0, 42, 0, iy, 25, ih < 29 ? ih : 29);
+				   iy += 29; ih -= 29;
+			       }
+
+				break; }
+	    case WE_P_RIGHT: {
+				 unsigned int w,h; getWindowSize(hWnd, &w, &h);
+			       
+				 int iy = 20, ih = h - 20 - 38;
+			       while (ih > 0) {
+				   skinBlit(hWnd, skin.pledit, 26, 42, -25, iy, 25, ih < 29 ? ih : 29);
+				   iy += 29; ih -= 29;
+			       }
+				 break; }
+	    case WE_P_BOTTOM: {
+				  unsigned int w,h; getWindowSize(hWnd, &w, &h);
+				  int middlePad = (w - 275);
+				  if (w >= 350) middlePad -= 75;
+
+				  skinBlit(hWnd, skin.pledit, 0, 72, 0, -38, 100, 38);
+				  skinBlit(hWnd, skin.pledit, 126, 72, -125, -38, 125, 38);
+				  break; }
 	}
     } while (cur);
     windowBlit(hWnd);
@@ -772,8 +866,7 @@ int main (int argc, char** argv) {
 
     initConsole();
 
-    initMainMenu();
-    initMainWindow();
+    initUI();
 
     // force the initial draw of all elements.
     for (int i=0; i < WE_COUNT; i++ ) {
@@ -800,8 +893,7 @@ int main (int argc, char** argv) {
 	.rightclickcb = handleRightClickEvents,
     };
 
-
-    createMainWindow(&wincb);
+    createWindows(&wincb);
 
     skin.mainbitmap = loadSkinBitmap("skin\\main.bmp");
     skin.titlebitmap = loadSkinBitmap("skin\\titlebar.bmp");
@@ -812,9 +904,11 @@ int main (int argc, char** argv) {
     skin.playpaus = loadSkinBitmap("skin\\playpaus.bmp");
     skin.nums_ex = loadSkinBitmap("skin\\nums_ex.bmp");
     skin.volume = loadSkinBitmap("skin\\volume.bmp");
-
     skin.balance = loadOptSkinBitmap("skin\\balance.bmp");
     if (!skin.balance) skin.balance = skin.volume;
+
+    skin.pledit = loadSkinBitmap("skin\\pledit.bmp");
+    skin.shufrep = loadSkinBitmap("skin\\shufrep.bmp");
 
     load_text_layout("skin\\text.txt");
 

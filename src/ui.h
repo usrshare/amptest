@@ -53,17 +53,19 @@ extern struct mouseData mouse;
 HBITMAP loadOptSkinBitmap (const char* filename);
 HBITMAP loadSkinBitmap (const char* filename);
 
+int normalizeRect (HWND hWnd, int* x, int* y, int* w, int* h); //converts negative XYWH values to positive
+
 int skinInitializePaint(HWND hWnd);
 int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int h);
 int windowBlit(HWND hWnd);
 int skinDestroyPaint(HWND hWnd);
-int invalidateXYWH(HWND hWnd, unsigned int x, unsigned int y, unsigned int w, unsigned int h);
+int invalidateXYWH(HWND hWnd, int x, int y, int w, int h);
 
 int showSystemMenu(HWND hWnd, int submenu, int x, int y);
 
-int initMainMenu (void);
-int initMainWindow(void);
-int createMainWindow(struct windowCallbacks* wincb);
+int initUI(void);
+
+int createWindows(struct windowCallbacks* wincb);
 int windowLoop(void);
 
 enum uiMessageBoxType {
@@ -72,6 +74,10 @@ enum uiMessageBoxType {
     UIMB_ERROR,
     UIMB_COUNT
 };
+
+int getWindowSize(HWND hWnd, unsigned int* w, unsigned int* h);
+
+int changeWindowTitle(HWND hWnd, const char* title);
 
 int uiOKMessageBox(HWND parenthWnd, const char* text, const char* title, int type);
 int uiInputBox(HWND hWnd, const char* prompt, char* rstring, size_t rstrSz);

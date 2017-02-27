@@ -18,6 +18,33 @@ struct uiWindow {
 
 struct mouseData mouse = {.X = -1, .Y = -1, .clickX = -1, .clickY = -1, .buttons = 0};
 
+int getWindowSize(HWND hWnd, unsigned int* w, unsigned int* h) {
+    
+    RECT winRect;
+    if ( !GetWindowRect(hWnd, &winRect) ) return 1;
+
+    *w = (winRect.right - winRect.left);
+    *h = (winRect.bottom - winRect.top);
+    return 0;
+}
+
+int normalizeRect (HWND hWnd, int* x, int* y, int* w, int* h) {
+
+    //this function converts negative X,Y,W and H values into positive ones,
+    //based on the window width and height.
+
+    RECT winRect;
+    if ( !GetWindowRect(hWnd, &winRect) ) return 1;
+
+    if ( *x < 0 ) *x = (winRect.right - winRect.left) + *x; //add window width
+    if ( *y < 0 ) *x = (winRect.bottom - winRect.top) + *y; //add window height
+
+    if ( (w) && ( *w < 0 ) ) *w = (winRect.right - winRect.left) - *x + *w + 1;
+    if ( (h) && ( *h < 0 ) ) *h = (winRect.bottom - winRect.top) - *y + *h + 1;
+
+    return 0;
+}
+
 struct windowData {
 
     //this struct is allocated for each instance of a window and pointed to with
@@ -56,7 +83,8 @@ int skinInitializePaint(HWND hWnd) {
     struct windowData* wdata = getWindowData(hWnd);
     wdata->hdcMem = CreateCompatibleDC(wndDC);
     wdata->hdcMemBuf = CreateCompatibleDC(wndDC);
-    wdata->hbmpBuf = CreateCompatibleBitmap(wndDC, 275, 116);
+    unsigned int w,h; getWindowSize(hWnd, &w,&h);
+    wdata->hbmpBuf = CreateCompatibleBitmap(wndDC, w, h);
     ReleaseDC(hWnd, wndDC);
 
     return 0;
@@ -67,6 +95,8 @@ int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int 
     //this function is used whenever part of a window has to be updated.
     //it can be called at any moment.
     //it updates the hbmpBuf bitmap.
+
+    normalizeRect(hWnd, &xd, &yd, &w, &h);
 
     struct windowData* wdata = getWindowData(hWnd);
     BITMAP srcBuf; //source bitmap.
@@ -113,13 +143,15 @@ int skinDestroyPaint(HWND hWnd) {
     return 0;
 }
 
-int invalidateXYWH(HWND hWnd, unsigned int x, unsigned int y, unsigned int w, unsigned int h) {
+int invalidateXYWH(HWND hWnd, int x, int y, int w, int h) {
+    normalizeRect(hWnd, &x, &y, &w, &h);
     CONST RECT r = {.top = y, .left = x, .bottom = y+h, .right = x+w};
     return InvalidateRect(hWnd,&r,0);
 }
 
 int showSystemMenu(HWND hWnd, int submenu, int x, int y) {
     POINT mp = {.x = x, .y = y};
+    normalizeRect(hWnd, &x, &y, NULL, NULL);
     MapWindowPoints(hWnd, NULL, &mp, 1);
     HMENU h_sysmenu = GetSubMenu(h_mainmenu, submenu);
     TrackPopupMenuEx(h_sysmenu,TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON,mp.x,mp.y,hWnd,NULL);
@@ -252,31 +284,30 @@ LRESULT WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 
-WNDCLASS mainwin = {CS_DBLCLKS,(WNDPROC)WindowProc,0,sizeof (void*),NULL,NULL,NULL,(HBRUSH) COLOR_BTNFACE+1,NULL,"helloMain"};
+WNDCLASS mwclass = {CS_DBLCLKS,(WNDPROC)WindowProc,0,sizeof (void*),NULL,NULL,NULL,(HBRUSH) COLOR_BTNFACE+1,NULL,"helloMain"};
 
-int initMainMenu (void) {
-    h_mainmenu = LoadMenu(mainwin.hInstance, MAKEINTRESOURCE(IDM_MAINMENU) );
-    return 0;
-}
+int initUI(void) {
+    
+    h_mainmenu = LoadMenu(mwclass.hInstance, MAKEINTRESOURCE(IDM_MAINMENU) );
+    
+    mwclass.hInstance = GetModuleHandle(0);
+    mwclass.hCursor = LoadCursor(0,IDC_ARROW);
 
-int initMainWindow (void) {
-
-    mainwin.hInstance = GetModuleHandle(0);
-    mainwin.hCursor = LoadCursor(0,IDC_ARROW);
-
-    RegisterClass(&mainwin);
+    RegisterClass(&mwclass);
     InitCommonControls();
 
     return 0;
 }
 
-int createMainWindow(struct windowCallbacks* wincb) {
+int createWindows(struct windowCallbacks* wincb) {
 
     struct windowData* wd = malloc(sizeof(struct windowData));
     memset(wd, 0, sizeof *wd);
     memcpy(&(wd->cb), wincb, sizeof (struct windowCallbacks));
 
-    h_window[W_MAIN] = CreateWindowEx(0, "helloMain", "hello world", WS_VISIBLE | WS_POPUP, 128, 128, 275, 116, NULL, NULL, mainwin.hInstance, wd);
+    h_window[W_MAIN] = CreateWindowEx(0, "helloMain", "hello world", WS_VISIBLE | WS_POPUP, 128, 128, 275, 116, NULL, NULL, mwclass.hInstance, wd);
+
+    h_window[W_PLAYLIST] = CreateWindowEx(0, "helloMain", "todo playlist", WS_VISIBLE | WS_POPUP, 128, 128+116, 275, 232, NULL, NULL, mwclass.hInstance, wd);
 
     SetTimer(h_window[W_MAIN],0,50,NULL);
     return 0; 
@@ -294,8 +325,11 @@ int windowLoop(void) {
     return 0;
 }
 
-
 UINT winMsgTypes[UIMB_COUNT] = { MB_ICONINFORMATION, MB_ICONWARNING, MB_ICONERROR };
+
+int uiChangeWindowTitle(HWND hWnd, const char* title) {
+    return SetWindowText(hWnd, title);
+}
 
 int uiOKMessageBox(HWND parenthWnd, const char* text, const char* title, int type) {
 
