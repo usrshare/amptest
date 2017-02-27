@@ -209,6 +209,7 @@ typedef void (*elementcb)(struct element* el, enum element_events ev);
 
 struct element {
 
+    enum ui_windows win; //window
     unsigned int x,y,w,h; //position
 
     int curState,oldState; //old state and current state. whenever they differ, this element
@@ -395,10 +396,13 @@ int handleDoubleClickEvents(HWND hWnd) {
     return 0;
 }
 
-int find_element_to_update(unsigned int element_c, struct element* element_v, struct element** cur) {
+int find_element_to_update(HWND hWnd, unsigned int element_c, struct element* element_v, struct element** cur) {
 
     while ((*cur) < (element_v + element_c)) {
-	if ((*cur)->curState != (*cur)->oldState) { (*cur)->oldState = (*cur)->curState; return (*cur)->curState; }
+	if ( ((hWnd == NULL) || (h_window[(*cur)->win] == hWnd)) && //if hwnd is null, don't check for window
+		((*cur)->curState != (*cur)->oldState) ) 
+	{ (*cur)->oldState = (*cur)->curState; return (*cur)->curState; }
+
 	(*cur)++;
     }
     *cur = NULL;
@@ -411,7 +415,8 @@ int find_element_to_update(unsigned int element_c, struct element* element_v, st
 int filePlay(void) {
     if ((ip) && (op->IsPlaying())) ip->Stop();
     if (preparePlugin(filePath)) return 1;
-    ip->Play(filePath);
+    int r = ip->Play(filePath);
+    if (r != 0) uiOKMessageBox(h_window[W_MAIN], "Unable to play file.","Error", UIMB_ERROR);
     return 0;
 }
 
@@ -420,7 +425,7 @@ int openFile(void) {
     int filter_c = countInputPlugins();
     const char* filter_v[filter_c];
     getInputPluginExtensions(filter_c,filter_v);
-    return uiOpenFile(h_mainwin, filter_c, filter_v, filePath, 1024);
+    return uiOpenFile(h_window[W_MAIN], filter_c, filter_v, filePath, 1024);
 }
 
 int openFileAndPlay(void) {
@@ -541,7 +546,7 @@ void mainWinTimerFunc(HWND hWnd) {
 
     for (int i=0; i < WE_COUNT; i++) {
 	struct element* e = &mw_elements[i];
-	if (e->curState != e->oldState) invalidateXYWH(h_mainwin,e->x,e->y,e->w,e->h);
+	if (e->curState != e->oldState) invalidateXYWH(h_window[e->win],e->x,e->y,e->w,e->h);
     }
 }
 
@@ -585,7 +590,7 @@ void mainWinPaintFunc(HWND hWnd) {
     int i=0;
     struct element* cur = &mw_elements[0];
     do {
-	i = find_element_to_update(WE_COUNT,mw_elements,&cur);
+	i = find_element_to_update(hWnd,WE_COUNT,mw_elements,&cur);
 
 	switch (cur - mw_elements) {
 	    case WE_BACKGROUND:
@@ -645,10 +650,10 @@ void mainWinPaintFunc(HWND hWnd) {
 			       while (scrollcnt >= skinTextLengthC(title)) scrollcnt = 0;
 
 			       if (titlesz <= (cur->w)) {
-				   skinDrawText(h_mainwin,title,cur->x,cur->y,cur->w,0);
+				   skinDrawText(h_window[cur->win],title,cur->x,cur->y,cur->w,0);
 			       } else {
-				   skinDrawText(h_mainwin,title,cur->x,cur->y,cur->w,scrollcnt % titlesz);
-				   skinDrawText(h_mainwin,title,cur->x + titlesz - ((5*scrollcnt) % titlesz),cur->y,cur->w - (titlesz - ((5*scrollcnt) % titlesz)),0);
+				   skinDrawText(h_window[cur->win],title,cur->x,cur->y,cur->w,scrollcnt % titlesz);
+				   skinDrawText(h_window[cur->win],title,cur->x + titlesz - ((5*scrollcnt) % titlesz),cur->y,cur->w - (titlesz - ((5*scrollcnt) % titlesz)),0);
 			       }
 			   }
 			   break;
@@ -656,14 +661,14 @@ void mainWinPaintFunc(HWND hWnd) {
 				 invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
 				 char bitrate[4];
 				 snprintf(bitrate,4,"%3d",pb.bitrate);
-				 skinDrawText(h_mainwin,bitrate,cur->x,cur->y,cur->w,0);
+				 skinDrawText(h_window[cur->win],bitrate,cur->x,cur->y,cur->w,0);
 				 break;
 			     }
 	    case WE_MIXRATE: {
 				 invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
 				 char samplerate[3];
 				 snprintf(samplerate,3,"%2d",pb.samplerate);
-				 skinDrawText(h_mainwin,samplerate,cur->x,cur->y,cur->w,0);
+				 skinDrawText(h_window[cur->win],samplerate,cur->x,cur->y,cur->w,0);
 				 break;
 			     }
 	    case WE_MONOSTER: {
@@ -755,7 +760,7 @@ int ampInit() {
     op->Init();
 
     gf.SetInfo = UI_SetInfo;
-    gf.hMainWindow = h_mainwin;
+    gf.hMainWindow = h_window[W_MAIN];
 
     int inputs_c = scanPlugins("plugins");
     if (!inputs_c) { return 1; }

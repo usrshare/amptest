@@ -8,7 +8,7 @@
 #include "win_misc.h"
 #include "menus.h"
 
-HWND h_mainwin;
+HWND h_window[W_COUNT];
 
 HMENU h_mainmenu;
 
@@ -276,9 +276,9 @@ int createMainWindow(struct windowCallbacks* wincb) {
     memset(wd, 0, sizeof *wd);
     memcpy(&(wd->cb), wincb, sizeof (struct windowCallbacks));
 
-    h_mainwin = CreateWindowEx(0, "helloMain", "hello world", WS_VISIBLE | WS_POPUP, 128, 128, 275, 116, NULL, NULL, mainwin.hInstance, wd);
+    h_window[W_MAIN] = CreateWindowEx(0, "helloMain", "hello world", WS_VISIBLE | WS_POPUP, 128, 128, 275, 116, NULL, NULL, mainwin.hInstance, wd);
 
-    SetTimer(h_mainwin,0,50,NULL);
+    SetTimer(h_window[W_MAIN],0,50,NULL);
     return 0; 
 }
 
@@ -458,7 +458,7 @@ int uiOpenFile(HWND hWnd, unsigned int types_c, const char** types_v, char* out_
     
     OPENFILENAME ofn = {
 	.lStructSize = sizeof ofn,
-	.hwndOwner = h_mainwin,
+	.hwndOwner = h_window[W_MAIN],
 	.hInstance = NULL,
 	.lpstrFilter = res_total,
 	.lpstrCustomFilter = NULL,

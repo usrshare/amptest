@@ -4,7 +4,14 @@
 #include <stdint.h>
 #include "wintypes.h"
 
-extern HWND h_mainwin;
+enum ui_windows {
+    W_MAIN = 0,
+    W_PLAYLIST,
+    W_EQUALIZER,
+    W_COUNT
+};
+
+extern HWND h_window[];
 
 struct windowCallbacks {
     void (*focuscb)(HWND hWnd, int focused);
@@ -42,12 +49,6 @@ struct mouseData {
 };
 
 extern struct mouseData mouse;
-
-enum window_types {
-    WT_MAIN = 0,
-    WT_EQUALIZER,
-    WT_PLAYLIST
-};
 
 HBITMAP loadOptSkinBitmap (const char* filename);
 HBITMAP loadSkinBitmap (const char* filename);
