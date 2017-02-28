@@ -28,6 +28,10 @@ struct skinData {
     HBITMAP balance;
     HBITMAP pledit;
     HBITMAP shufrep;
+    unsigned int fgcolor;
+    unsigned int bgcolor;
+    unsigned int selfgcolor;
+    unsigned int selbgcolor;
 } skin;
 
 struct playbackData {
@@ -153,12 +157,14 @@ int skinDrawTime(HWND hWnd, int time, int x, int y) {
 
 int hover(HWND hWnd, short x, short y, short w, short h) {
 
+    normalizeRect(hWnd,&x,&y,&w,&h);
     if ((mouse.hWnd == hWnd) && (mouse.X >= x) && (mouse.X < (x+w)) &&
 	    (mouse.Y >= y) && (mouse.Y < (y+h))) return 1; else return 0;
 }
 
 int hold(HWND hWnd, short x, short y, short w, short h, short bmask) {
 
+    normalizeRect(hWnd,&x,&y,&w,&h);
     if ( (mouse.hWnd == hWnd) &&
 	    (mouse.clickX >= x) && (mouse.clickX < (x+w)) &&
 	    (mouse.clickY >= y) && (mouse.clickY < (y+h)) &&
@@ -173,6 +179,7 @@ int hold(HWND hWnd, short x, short y, short w, short h, short bmask) {
 
 int click(HWND hWnd, short x, short y, short w, short h, short bmask) {
 
+    normalizeRect(hWnd,&x,&y,&w,&h);
     if ( (mouse.hWnd == hWnd) &&
 	    (mouse.clickX >= x) && (mouse.clickX < (x+w)) &&
 	    (mouse.clickY >= y) && (mouse.clickY < (y+h)) &&
@@ -214,7 +221,7 @@ typedef void (*elementcb)(struct element* el, enum element_events ev);
 struct element {
 
     enum ui_windows win; //window
-    unsigned int x,y,w,h; //position
+    short x,y,w,h; //position
 
     int curState,oldState; //old state and current state. whenever they differ, this element
     //is redrawn.
@@ -279,8 +286,8 @@ enum windowelements {
     WE_B_STOP,
     WE_B_NEXT,
     WE_B_OPEN,
-    //WE_B_SHUFFLE,
-    //WE_B_REPEAT,
+    WE_B_SHUFFLE,
+    WE_B_REPEAT,
 
     WE_P_TOP,
     WE_P_LEFT,
@@ -334,6 +341,8 @@ struct element mw_elements[WE_COUNT] = {
     {  .x = 85, .y = 88, .w = 23, .h = 18,	.type=ET_BUTTON}, //stop
     {  .x = 108, .y = 88, .w = 22, .h = 18,	.type=ET_BUTTON}, //next
     {  .x = 136, .y = 89, .w = 22, .h = 16,	.type=ET_BUTTON}, //open
+    {  .x = 164, .y = 89, .w = 47, .h = 15,	.type=ET_BUTTON}, //shuffle
+    {  .x = 211, .y = 89, .w = 28, .h = 15,	.type=ET_BUTTON}, //repeat
 
     //playlist elements
     {  .win = W_PLAYLIST, .x = 0, .y = 0, .w = -1, .h = 20}, //playlist top
@@ -341,6 +350,8 @@ struct element mw_elements[WE_COUNT] = {
     {  .win = W_PLAYLIST, .x = -25, .y = 20, .w = 25, .h = -39}, //playlist right
     {  .win = W_PLAYLIST, .x = 0, .y = -38, .w = -1, .h = -1}, //playlist bottom
     {  .win = W_PLAYLIST, .x = 25, .y = 20, .w = -26, .h = -39}, //playlist center.
+    {  .win = W_PLAYLIST, .type = ET_BUTTON, .x = -12, .y = 3, .w = 9, .h = 9}, //windowshade button
+    {  .win = W_PLAYLIST, .type = ET_BUTTON, .x = -2, .y = 3, .w = 9, .h = 9}, //close button
 };
 
 void UI_SetInfo(int br, int sr, int st, int synch) {
@@ -829,21 +840,21 @@ void mainWinPaintFunc(HWND hWnd) {
 	    case WE_P_LEFT: {
 				unsigned int w,h; getWindowSize(hWnd, &w, &h);
 
-			       int iy = 20, ih = h - 20 - 38;
-			       while (ih > 0) {
-				   skinBlit(hWnd, skin.pledit, 0, 42, 0, iy, 25, ih < 29 ? ih : 29);
-				   iy += 29; ih -= 29;
-			       }
+				int iy = 20, ih = h - 20 - 38;
+				while (ih > 0) {
+				    skinBlit(hWnd, skin.pledit, 0, 42, 0, iy, 25, ih < 29 ? ih : 29);
+				    iy += 29; ih -= 29;
+				}
 
 				break; }
 	    case WE_P_RIGHT: {
 				 unsigned int w,h; getWindowSize(hWnd, &w, &h);
-			       
+
 				 int iy = 20, ih = h - 20 - 38;
-			       while (ih > 0) {
-				   skinBlit(hWnd, skin.pledit, 26, 42, -25, iy, 25, ih < 29 ? ih : 29);
-				   iy += 29; ih -= 29;
-			       }
+				 while (ih > 0) {
+				     skinBlit(hWnd, skin.pledit, 26, 42, -25, iy, 25, ih < 29 ? ih : 29);
+				     iy += 29; ih -= 29;
+				 }
 				 break; }
 	    case WE_P_BOTTOM: {
 				  unsigned int w,h; getWindowSize(hWnd, &w, &h);
@@ -853,23 +864,33 @@ void mainWinPaintFunc(HWND hWnd) {
 				  skinBlit(hWnd, skin.pledit, 0, 72, 0, -38, 125, 38);
 				  skinBlit(hWnd, skin.pledit, 126, 72, -150, -38, 150, 38);
 
-				int ix=125, iw = middlePad;
-				while (iw > 0) {
-				   skinBlit(hWnd, skin.pledit, 179, 0, ix, -38, iw < 25 ? iw : 25, 38);
-				   ix += 25; iw -= 25;
-				}
-				if (w >= 350) skinBlit(hWnd, skin.pledit,205,0,ix,-38,75,38);
+				  int ix=125, iw = middlePad;
+				  while (iw > 0) {
+				      skinBlit(hWnd, skin.pledit, 179, 0, ix, -38, iw < 25 ? iw : 25, 38);
+				      ix += 25; iw -= 25;
+				  }
+				  if (w >= 350) skinBlit(hWnd, skin.pledit,205,0,ix,-38,75,38);
 
 
 				  break; }
 	    case WE_P_CENTER: {
-				  int x = cur->x, y= cur->y, w=cur->w, h=cur->h;
+				  short x = cur->x, y= cur->y, w=cur->w, h=cur->h;
 				  normalizeRect(hWnd,&x,&y,&w,&h);
 
 
 
-				  uiDrawText(hWnd, "hello world", cur->x, cur->y, cur->w, cur->h, 0x000000, 0x00ff00, UITA_CENTER);
-		break; }
+				  uiDrawText(hWnd, "hello world", cur->x, cur->y, cur->w, cur->h, skin.bgcolor, skin.fgcolor, UITA_CENTER);
+				  break; }
+	    case WE_P_B_CLOSE: {
+				    invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
+				   if (cur->curState) {
+				       printf("x\n");
+				       skinBlit(hWnd, skin.pledit, 52, 42, cur->x, cur->y, cur->w, cur->h);
+				   } else {
+				       //int skin_y = mw_elements[WE_P_TOP].curState ? 0 : 21;
+				       //skinBlit(hWnd, skin.pledit, 167, skin_y + 3, cur->x, cur->y, cur->w, cur->h);
+				   }
+				   break; }
 	}
     } while (cur);
     windowBlit(hWnd);
@@ -886,6 +907,32 @@ int ampInit() {
 
     int inputs_c = scanPlugins("plugins");
     if (!inputs_c) { return 1; }
+
+    return 0;
+}
+
+int loadPLColors(struct skinData* sd, const char* filename) {
+
+    FILE* infile = fopen(filename,"r");
+    if (!infile) return 1;
+
+    char line[80];
+    char* curline = NULL;
+
+    while ( (curline = fgets(line,80,infile)) != NULL) {
+
+	char* equals = strchr(curline,'=');
+	if (!equals) continue;
+	*equals=0; char* value = equals+1;
+	if (value[0] == '#') value++;
+
+	if (strcmp(curline,"Normal") == 0) sd->fgcolor = strtol(value,NULL,16);  
+	if (strcmp(curline,"Current") == 0) sd->selfgcolor = strtol(value,NULL,16);  
+	if (strcmp(curline,"NormalBG") == 0) sd->bgcolor = strtol(value,NULL,16);  
+	if (strcmp(curline,"SelectedBG") == 0) sd->selbgcolor = strtol(value,NULL,16);  
+    }
+
+    fclose(infile);
 
     return 0;
 }
@@ -937,6 +984,8 @@ int main (int argc, char** argv) {
 
     skin.pledit = loadSkinBitmap("skin\\pledit.bmp");
     skin.shufrep = loadSkinBitmap("skin\\shufrep.bmp");
+
+    loadPLColors(&skin, "skin\\pledit.txt");
 
     load_text_layout("skin\\text.txt");
 

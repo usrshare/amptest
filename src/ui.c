@@ -30,7 +30,7 @@ int getWindowSize(HWND hWnd, unsigned int* w, unsigned int* h) {
     return 0;
 }
 
-int normalizeRect (HWND hWnd, int* x, int* y, int* w, int* h) {
+int normalizeRect (HWND hWnd, short* x, short* y, short* w, short* h) {
 
     //this function converts negative X,Y,W and H values into positive ones,
     //based on the window width and height.
@@ -93,7 +93,7 @@ int skinInitializePaint(HWND hWnd) {
     return 0;
 }
 
-int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int h) {
+int skinBlit(HWND hWnd, HBITMAP src, short xs, short ys, short xd, short yd, short w, short h) {
 
     //this function is used whenever part of a window has to be updated.
     //it can be called at any moment.
@@ -116,7 +116,7 @@ int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int 
     return 0;
 }
 
-int uiDrawText(HWND hWnd, const char* text, int x, int y, int w, int h, unsigned int bgcolor, unsigned int fgcolor, enum text_align align) {
+int uiDrawText(HWND hWnd, const char* text, short x, short y, short w, short h, unsigned int bgcolor, unsigned int fgcolor, enum text_align align) {
 
     normalizeRect(hWnd, &x, &y, &w, &h);
 
@@ -174,13 +174,13 @@ int skinDestroyPaint(HWND hWnd) {
     return 0;
 }
 
-int invalidateXYWH(HWND hWnd, int x, int y, int w, int h) {
+int invalidateXYWH(HWND hWnd, short x, short y, short w, short h) {
     normalizeRect(hWnd, &x, &y, &w, &h);
     CONST RECT r = {.top = y, .left = x, .bottom = y+h, .right = x+w};
     return InvalidateRect(hWnd,&r,0);
 }
 
-int showSystemMenu(HWND hWnd, int submenu, int x, int y) {
+int showSystemMenu(HWND hWnd, int submenu, short x, short y) {
     POINT mp = {.x = x, .y = y};
     normalizeRect(hWnd, &x, &y, NULL, NULL);
     MapWindowPoints(hWnd, NULL, &mp, 1);

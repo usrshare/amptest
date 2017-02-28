@@ -59,16 +59,16 @@ extern struct mouseData mouse;
 HBITMAP loadOptSkinBitmap (const char* filename);
 HBITMAP loadSkinBitmap (const char* filename);
 
-int normalizeRect (HWND hWnd, int* x, int* y, int* w, int* h); //converts negative XYWH values to positive
+int normalizeRect (HWND hWnd, short* x, short* y, short* w, short* h);
 
 int skinInitializePaint(HWND hWnd);
-int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int h);
+int skinBlit(HWND hWnd, HBITMAP src, short xs, short ys, short xd, short yd, short w, short h);
 int windowBlit(HWND hWnd);
 int skinDestroyPaint(HWND hWnd);
-int invalidateXYWH(HWND hWnd, int x, int y, int w, int h);
-int uiDrawText(HWND hWnd, const char* text, int x, int y, int w, int h, unsigned int bgcolor, unsigned int fgcolor, enum text_align align);
+int invalidateXYWH(HWND hWnd, short x, short y, short w, short h);
+int uiDrawText(HWND hWnd, const char* text, short x, short y, short w, short h, unsigned int bgcolor, unsigned int fgcolor, enum text_align align);
 
-int showSystemMenu(HWND hWnd, int submenu, int x, int y);
+int showSystemMenu(HWND hWnd, int submenu, short x, short y);
 
 int initUI(void);
 
