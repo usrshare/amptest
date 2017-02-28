@@ -445,9 +445,15 @@ int find_element_to_update(HWND hWnd, unsigned int element_c, struct element* el
 }
 
 int filePlay(void) {
-    if ((ip) && (op->IsPlaying())) ip->Stop();
+
+    if ((ip) && (ip->IsPaused()) ) { ip->UnPause(); return 0; }
+
+    if ((ip) && (op->IsPlaying())) { ip->Stop(); } //stop if already playing
+
     if (preparePlugin(filePath)) return 1;
     int r = ip->Play(filePath);
+    if (ip->GetOutputTime() >= ip->GetLength()) ip->SetOutputTime(0);
+    printf("r is %d\n",r);
     if (r != 0) uiOKMessageBox(h_window[W_MAIN], "Unable to play file.","Error", UIMB_ERROR);
     return 0;
 }
@@ -857,6 +863,11 @@ void mainWinPaintFunc(HWND hWnd) {
 
 				  break; }
 	    case WE_P_CENTER: {
+				  int x = cur->x, y= cur->y, w=cur->w, h=cur->h;
+				  normalizeRect(hWnd,&x,&y,&w,&h);
+
+
+
 				  uiDrawText(hWnd, "hello world", cur->x, cur->y, cur->w, cur->h, 0x000000, 0x00ff00, UITA_CENTER);
 		break; }
 	}

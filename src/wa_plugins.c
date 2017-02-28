@@ -135,6 +135,7 @@ int preparePlugin(const char* media_fn) {
 		if (!r) r = inputs_v[i]->IsOurFile(media_fn);
 		if (r) {
 			if (ip != inputs_v[i]) {
+			op->Close();
 			}
 			ip = inputs_v[i];
 			//printf("Plugin: %s\n", ip->description);
