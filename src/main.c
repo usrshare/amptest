@@ -286,6 +286,7 @@ enum windowelements {
     WE_P_LEFT,
     WE_P_RIGHT,
     WE_P_BOTTOM,
+    WE_P_CENTER, //the area where the playlist itself is drawn
     WE_P_B_WINDOWSHADE,
     WE_P_B_CLOSE,
 
@@ -305,7 +306,8 @@ struct element mw_elements[WE_COUNT] = {
     //that the item is abs(x) pixels away from the bottom or right
     //border.
 
-    //a negative W or H means the item's width or height is 
+    //a negative W or H means the item's width or height is abs(x-1)
+    //pixels before the bottom or right border of the window.
 
     {  .x = 0,   .y = 0, .w = 275, .h = 116}, //window background
     {  .x = 0,   .y = 0, .w = 275,  .h = 14}, //titlebar
@@ -338,6 +340,7 @@ struct element mw_elements[WE_COUNT] = {
     {  .win = W_PLAYLIST, .x = 0, .y = 20, .w = 25, .h = -39}, //playlist left
     {  .win = W_PLAYLIST, .x = -25, .y = 20, .w = 25, .h = -39}, //playlist right
     {  .win = W_PLAYLIST, .x = 0, .y = -38, .w = -1, .h = -1}, //playlist bottom
+    {  .win = W_PLAYLIST, .x = 25, .y = 20, .w = -26, .h = -39}, //playlist center.
 };
 
 void UI_SetInfo(int br, int sr, int st, int synch) {
@@ -801,6 +804,7 @@ void mainWinPaintFunc(HWND hWnd) {
 
 			       skinBlit(hWnd, skin.pledit, 26, skin_y, centerPos, 0, 100, 20);
 
+
 			       int ix=0;
 
 			       ix = 25;
@@ -814,6 +818,7 @@ void mainWinPaintFunc(HWND hWnd) {
 				   skinBlit(hWnd, skin.pledit, 127, skin_y, ix, 0, rightPad >= 25 ? 25 : rightPad, 20);
 				   ix += 25; rightPad -= 25;
 			       }
+
 			       break; }
 	    case WE_P_LEFT: {
 				unsigned int w,h; getWindowSize(hWnd, &w, &h);
@@ -839,9 +844,21 @@ void mainWinPaintFunc(HWND hWnd) {
 				  int middlePad = (w - 275);
 				  if (w >= 350) middlePad -= 75;
 
-				  skinBlit(hWnd, skin.pledit, 0, 72, 0, -38, 100, 38);
-				  skinBlit(hWnd, skin.pledit, 126, 72, -125, -38, 125, 38);
+				  skinBlit(hWnd, skin.pledit, 0, 72, 0, -38, 125, 38);
+				  skinBlit(hWnd, skin.pledit, 126, 72, -150, -38, 150, 38);
+
+				int ix=125, iw = middlePad;
+				while (iw > 0) {
+				   skinBlit(hWnd, skin.pledit, 179, 0, ix, -38, iw < 25 ? iw : 25, 38);
+				   ix += 25; iw -= 25;
+				}
+				if (w >= 350) skinBlit(hWnd, skin.pledit,205,0,ix,-38,75,38);
+
+
 				  break; }
+	    case WE_P_CENTER: {
+				  uiDrawText(hWnd, "hello world", cur->x, cur->y, cur->w, cur->h, 0x000000, 0x00ff00, UITA_CENTER);
+		break; }
 	}
     } while (cur);
     windowBlit(hWnd);

@@ -38,6 +38,12 @@ enum mouse_wheel {
     MW_DOWN = 2,
 };
 
+enum text_align {
+    UITA_LEFT,
+    UITA_CENTER,
+    UITA_RIGHT
+};
+
 struct mouseData {
     HWND hWnd;
     short X; //current position
@@ -60,6 +66,7 @@ int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int 
 int windowBlit(HWND hWnd);
 int skinDestroyPaint(HWND hWnd);
 int invalidateXYWH(HWND hWnd, int x, int y, int w, int h);
+int uiDrawText(HWND hWnd, const char* text, int x, int y, int w, int h, unsigned int bgcolor, unsigned int fgcolor, enum text_align align);
 
 int showSystemMenu(HWND hWnd, int submenu, int x, int y);
 

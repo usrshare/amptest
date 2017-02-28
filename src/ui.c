@@ -8,6 +8,8 @@
 #include "win_misc.h"
 #include "menus.h"
 
+HFONT h_font;
+
 HWND h_window[W_COUNT];
 
 HMENU h_mainmenu;
@@ -37,7 +39,7 @@ int normalizeRect (HWND hWnd, int* x, int* y, int* w, int* h) {
     if ( !GetWindowRect(hWnd, &winRect) ) return 1;
 
     if ( *x < 0 ) *x = (winRect.right - winRect.left) + *x; //add window width
-    if ( *y < 0 ) *x = (winRect.bottom - winRect.top) + *y; //add window height
+    if ( *y < 0 ) *y = (winRect.bottom - winRect.top) + *y; //add window height
 
     if ( (w) && ( *w < 0 ) ) *w = (winRect.right - winRect.left) - *x + *w + 1;
     if ( (h) && ( *h < 0 ) ) *h = (winRect.bottom - winRect.top) - *y + *h + 1;
@@ -82,6 +84,7 @@ int skinInitializePaint(HWND hWnd) {
     HDC wndDC = GetDC(hWnd);
     struct windowData* wdata = getWindowData(hWnd);
     wdata->hdcMem = CreateCompatibleDC(wndDC);
+    SelectObject(wdata->hdcMem, h_font);
     wdata->hdcMemBuf = CreateCompatibleDC(wndDC);
     unsigned int w,h; getWindowSize(hWnd, &w,&h);
     wdata->hbmpBuf = CreateCompatibleBitmap(wndDC, w, h);
@@ -109,6 +112,34 @@ int skinBlit(HWND hWnd, HBITMAP src, int xs, int ys, int xd, int yd, int w, int 
 
     SelectObject(wdata->hdcMem, oldDstBuf);
     SelectObject(wdata->hdcMemBuf, oldSrcBuf);
+
+    return 0;
+}
+
+int uiDrawText(HWND hWnd, const char* text, int x, int y, int w, int h, unsigned int bgcolor, unsigned int fgcolor, enum text_align align) {
+
+    normalizeRect(hWnd, &x, &y, &w, &h);
+
+    struct windowData* wdata = getWindowData(hWnd);
+    HGDIOBJ oldDstBuf = SelectObject(wdata->hdcMem, wdata->hbmpBuf);
+
+    int uFormat = 0;
+
+    switch(align) {
+	case UITA_LEFT: uFormat |= DT_LEFT; break;
+	case UITA_CENTER: uFormat |= DT_CENTER; break;
+	case UITA_RIGHT: uFormat |= DT_RIGHT; break;
+    }
+
+    SetBkColor(wdata->hdcMem, RGB(bgcolor >> 16, (bgcolor >> 8) & 0xFF, bgcolor & 0xFF) );
+    SetBkMode(wdata->hdcMem, OPAQUE);
+    SetTextColor(wdata->hdcMem, RGB(fgcolor >> 16, (fgcolor >> 8) & 0xFF, fgcolor & 0xFF) );
+    
+    RECT textRect = {.top = y, .bottom = y+h, .left = x, .right = x+w };
+
+    DrawText(wdata->hdcMem, text, strlen(text), &textRect, uFormat);
+
+    SelectObject(wdata->hdcMem, oldDstBuf);
 
     return 0;
 }
@@ -295,6 +326,8 @@ int initUI(void) {
 
     RegisterClass(&mwclass);
     InitCommonControls();
+
+    h_font = CreateFont(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,	DEFAULT_PITCH, "Arial");
 
     return 0;
 }
@@ -509,3 +542,4 @@ void initConsole(void) {
     SetConsoleOutputCP(65001); //this program still outputs everything as UTF-8, even when running in Windows.
 }
 
+				   

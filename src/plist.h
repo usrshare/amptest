@@ -4,7 +4,7 @@
 
 struct pl_item {
 	int loaded;
-	char filePath[256];
+	char filePath[1024];
 	char title[256];
 	int length;
 };
