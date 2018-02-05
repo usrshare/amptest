@@ -116,7 +116,21 @@ int skinBlit(HWND hWnd, HBITMAP src, short xs, short ys, short xd, short yd, sho
     return 0;
 }
 
-int uiDrawText(HWND hWnd, const char* text, short x, short y, short w, short h, unsigned int bgcolor, unsigned int fgcolor, enum text_align align) {
+int skinRect(HWND hWnd, short x, short y, short w, short h, unsigned int color) {
+    
+    normalizeRect(hWnd, &x, &y, &w, &h);
+    struct windowData* wdata = getWindowData(hWnd);
+    HGDIOBJ oldDstBuf = SelectObject(wdata->hdcMem, wdata->hbmpBuf);
+
+
+
+    SelectObject(wdata->hdcMem, oldDstBuf);
+}
+
+int uiLineHeight(HWND hWnd) {
+}
+
+int uiDrawText(HWND hWnd, const char* text, short x, short y, short w, short h, unsigned int bgcolor, unsigned int fgcolor, enum text_align align, int* line_height) {
 
     normalizeRect(hWnd, &x, &y, &w, &h);
 
@@ -138,6 +152,12 @@ int uiDrawText(HWND hWnd, const char* text, short x, short y, short w, short h, 
     RECT textRect = {.top = y, .bottom = y+h, .left = x, .right = x+w };
 
     DrawText(wdata->hdcMem, text, strlen(text), &textRect, uFormat);
+
+    if (line_height) {
+	TEXTMETRIC tm;
+	GetTextMetrics(wdata->hdcMem, &tm);
+	*line_height = tm.tmHeight;
+    }
 
     SelectObject(wdata->hdcMem, oldDstBuf);
 
@@ -327,20 +347,24 @@ int initUI(void) {
     RegisterClass(&mwclass);
     InitCommonControls();
 
-    h_font = CreateFont(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,	DEFAULT_PITCH, "Arial");
+    h_font = CreateFont(11, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,	DEFAULT_PITCH, "Arial");
 
     return 0;
 }
 
 int createWindows(struct windowCallbacks* wincb) {
 
-    struct windowData* wd = malloc(sizeof(struct windowData));
-    memset(wd, 0, sizeof *wd);
-    memcpy(&(wd->cb), wincb, sizeof (struct windowCallbacks));
+    struct windowData* wd_m = malloc(sizeof(struct windowData));
+    memset(wd_m, 0, sizeof *wd_m);
+    memcpy(&(wd_m->cb), wincb, sizeof (struct windowCallbacks));
 
-    h_window[W_MAIN] = CreateWindowEx(0, "helloMain", "hello world", WS_VISIBLE | WS_POPUP, 128, 128, 275, 116, NULL, NULL, mwclass.hInstance, wd);
+    h_window[W_MAIN] = CreateWindowEx(0, "helloMain", "hello world", WS_VISIBLE | WS_POPUP, 128, 128, 275, 116, NULL, NULL, mwclass.hInstance, wd_m);
+    
+    struct windowData* wd_p = malloc(sizeof(struct windowData));
+    memset(wd_p, 0, sizeof *wd_p);
+    memcpy(&(wd_p->cb), wincb, sizeof (struct windowCallbacks));
 
-    h_window[W_PLAYLIST] = CreateWindowEx(0, "helloMain", "todo playlist", WS_VISIBLE | WS_POPUP, 128, 128+116, 275, 232, NULL, NULL, mwclass.hInstance, wd);
+    h_window[W_PLAYLIST] = CreateWindowEx(0, "helloMain", "todo playlist", WS_VISIBLE | WS_POPUP, 128, 128+116, 275, 232, NULL, NULL, mwclass.hInstance, wd_p);
 
     SetTimer(h_window[W_MAIN],0,50,NULL);
     return 0; 
@@ -497,6 +521,50 @@ char* parse_winamp_file_formats(const char* str, char* o_filters, unsigned int o
 	i++;
     }
     return res_cur;
+}
+
+int windowVisibility(HWND hWnd, int show) {
+    return ShowWindow(hWnd, show ? SW_SHOW : SW_HIDE);
+}
+
+int uiOpenFiles(HWND hWnd, unsigned int types_c, const char** types_v, char* out_file, unsigned int out_sz) {
+
+    // -- this huge piece of code below concatenates all the filter strings into one.
+
+    #define RES_SIZE 65536
+
+    char res_total[RES_SIZE]; //if that's not enough, ease up on the plugins!
+    char* res_last = res_total;
+   
+    int r = sprintf(res_total,"All Supported Files%c",0);
+    res_last += r;
+
+    for (int i=0; i< types_c; i++) {
+	if (res_last) res_last = concat_winamp_file_formats(types_v[i],res_last,RES_SIZE - (res_last - res_total));
+	res_last[0] = (i < (types_c-1)) ? ';' : 0; res_last++;
+    }
+    for (int i=0; i< types_c; i++) {
+	if (res_last) res_last = parse_winamp_file_formats(types_v[i],res_last,RES_SIZE - (res_last - res_total));
+    }
+    res_last[0] = 0; res_last++;
+    //print_until_dbl_zero(res_total);
+
+    // -- finally!
+    
+    OPENFILENAME ofn = {
+	.lStructSize = sizeof ofn,
+	.hwndOwner = h_window[W_MAIN],
+	.hInstance = NULL,
+	.lpstrFilter = res_total,
+	.lpstrCustomFilter = NULL,
+	.nMaxCustFilter = 0,
+	.nFilterIndex = 1,
+	.lpstrFile = out_file,
+	.nMaxFile = out_sz,
+	.Flags = OFN_ALLOWMULTISELECT | OFN_EXPLORER | OFN_FILEMUSTEXIST
+    };
+    r = GetOpenFileName(&ofn);
+    return r;
 }
 
 int uiOpenFile(HWND hWnd, unsigned int types_c, const char** types_v, char* out_file, unsigned int out_sz) {

@@ -181,6 +181,7 @@ struct waInputPlugin* loadInputPlugin(const char* filename);
 struct waOutputPlugin* loadOutputPlugin(const char* filename);
 
 int loadNewInputPlugin(const char* filename);
+struct waInputPlugin* findPlugin(const char* media_fn);
 int preparePlugin(const char* media_fn);
 int scanPlugins(const char* directory);
 

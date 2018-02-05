@@ -8,31 +8,13 @@
 
 #include "wa_plugins.h"
 #include "ui.h"
+#include "plist.h"
 #include "ui_string.h"
+#include "ui_skin.h"
 #include "menus.h"
 #include "win_misc.h"
 
-
 char filePath[1024];
-
-struct skinData {
-    HBITMAP mainbitmap;
-    HBITMAP titlebitmap;
-    HBITMAP cbuttons;
-    HBITMAP posbar;
-    HBITMAP text;
-    HBITMAP monoster;
-    HBITMAP playpaus;
-    HBITMAP nums_ex;
-    HBITMAP volume;
-    HBITMAP balance;
-    HBITMAP pledit;
-    HBITMAP shufrep;
-    unsigned int fgcolor;
-    unsigned int bgcolor;
-    unsigned int selfgcolor;
-    unsigned int selbgcolor;
-} skin;
 
 struct playbackData {
     int bitrate;
@@ -44,116 +26,17 @@ struct playbackData {
     int balance; // -128 ~ 127
 } pb;
 
+plist_t playlist;
+
 bool doubleMode = false;
 
 int timercnt = 0;
 int scrollcnt = 0;
 
+bool playlistVisible = true;
+
 #define TIMER_BLANK INT_MIN
 
-int skinDrawTextScroll(HWND hWnd, const char* text, int x, int y, int w, int scroll, bool noclear) {
-
-    const char* cur = text;
-    int c_x = 0, c_y = 0, r = 0;
-    unsigned int c_cp = 0;
-
-    int dx= -scroll;
-
-    if (!noclear) {
-	for (int ix=0; ix < (w / 5); ix++) 
-	    skinBlit(hWnd, skin.text, 150,0,x+(ix*5),y,5,6); //tile with empty space
-    }
-
-    do {
-	r = iterate_utf8_codepoint(cur,&c_cp);
-	//printf("Character '%.*s' (%db) has a code %d\n",r,cur,r,c_cp);
-	if (r == 0) return 0;
-
-	find_utf8char_in_utf8layout(c_cp, text_layout, &c_x, &c_y); 
-
-	int cwidth = 5;
-
-	if (dx >= w) return 0; //if we're already full, end here.
-	if ((dx + cwidth) > w) cwidth = w - dx; //cut text length to whatever fits
-
-	if ((dx + cwidth) > 0) { //if this character is at least partially visible,
-
-	    int xsh = (dx < 0 ? -dx : 0);
-
-	    skinBlit(hWnd, skin.text, (c_x*5) + xsh, c_y*6, x + dx + xsh, y, cwidth - xsh, 6);
-	    // if dx < 0, then that means this character should be only blitted partially.
-	}
-
-	dx += (c_cp == '@' ? 7 : 5);
-	cur += r;
-
-    } while (r > 0);
-    return 0;
-}
-
-int skinDrawText(HWND hWnd, const char* text, int x, int y, int w, int skip) {
-
-    const char* cur = text;
-    int c_x = 0, c_y = 0, r = 0;
-    unsigned int c_cp = 0;
-
-    if (w < 0) return 0;
-    int dx = 0;
-
-    for (int ix=0; ix < (w / 5); ix++) 
-	skinBlit(hWnd, skin.text, 150,0,x+(ix*5),y,5,6); //tile with empty space
-
-    int chars = 0;
-    do {
-	r = iterate_utf8_codepoint(cur,&c_cp);
-	//printf("Character '%.*s' (%db) has a code %d\n",r,cur,r,c_cp);
-	if (r == 0) return 0;
-
-	if (chars >= skip) {
-	    find_utf8char_in_utf8layout(c_cp, text_layout, &c_x, &c_y); 
-
-	    if (dx >= w) return 0; //if we're already full, end here.
-
-	    skinBlit(hWnd, skin.text, (c_x*5), c_y*6, x + dx, y, 5, 6);
-
-	    dx += 5;
-	}
-	cur += r;
-	chars++;
-
-    } while (r > 0);
-    return 0;
-}
-
-const char* nums_ex_layout = "0123456789 -"; //
-
-int skinDrawTimeString(HWND hWnd, const char* text, int x, int y) {
-
-    const char* c = text;
-    int dx = x;
-    while (*c != 0) {
-	char* ex = strchr(nums_ex_layout, *c);
-	if (ex) {
-	    int sx = (ex - nums_ex_layout) * 9;
-	    skinBlit(hWnd,skin.nums_ex,sx,0,dx,y,9,13);
-	}
-	dx += 13;
-	c++;
-	if (c == text+3) dx += 2;
-    }
-    return 0;
-}
-
-int skinDrawTime(HWND hWnd, int time, int x, int y) {
-
-    char text[6];
-    if (time >= 0) {
-	snprintf(text,6,"% 03d%02d\n", time / 60, time % 60);
-    } else {
-	snprintf(text,6,"-%02d%02d\n", abs(time) / 60, abs(time) % 60);
-    }
-    return skinDrawTimeString(hWnd,text,x,y);
-}
 
 int hover(HWND hWnd, short x, short y, short w, short h) {
 
@@ -444,7 +327,9 @@ int find_element_to_update(HWND hWnd, unsigned int element_c, struct element* el
     while ((*cur) < (element_v + element_c)) {
 	if ( ((hWnd == NULL) || (h_window[(*cur)->win] == hWnd)) && //if hwnd is null, don't check for window
 		((*cur)->curState != (*cur)->oldState) ) 
-	{ (*cur)->oldState = (*cur)->curState; return (*cur)->curState; }
+	{ 
+	    if (hWnd == h_window[W_PLAYLIST]) printf("%p's %d: %d -> %d\n",hWnd,*cur - element_v, (*cur)->oldState, (*cur)->curState);
+	    (*cur)->oldState = (*cur)->curState; return (*cur)->curState; }
 
 	(*cur)++;
     }
@@ -469,12 +354,92 @@ int filePlay(void) {
     return 0;
 }
 
+void invalidateElement(enum windowelements e) {
+    invalidateXYWH(h_window[mw_elements[e].win],mw_elements[e].x,mw_elements[e].y,mw_elements[e].w,mw_elements[e].h);
+    
+}
+
+void updatePlaylist(void) {
+    mw_elements[WE_P_CENTER].curState += 1;
+    invalidateElement(WE_P_CENTER);
+}
+
+int loadFromPlaylist(int index) {
+    strncpy(filePath,plist_get(&playlist,index).filePath,1024);
+    playlist.i[index].loaded = true;
+    return 0;
+}
+
+int loadFile(const char* filename, struct pl_item* item) {
+
+    struct waInputPlugin* fileip = findPlugin(filename);
+    if (!fileip) return 1;
+    
+    strncpy(item->filePath,filename,2048);
+    fileip->GetFileInfo(filename, item->title, &item->length);
+
+    return 0;
+}
+
 int openFile(void) {
 
     int filter_c = countInputPlugins();
     const char* filter_v[filter_c];
     getInputPluginExtensions(filter_c,filter_v);
-    return uiOpenFile(h_window[W_MAIN], filter_c, filter_v, filePath, 1024);
+
+    char selectedFiles[65536];
+
+    int r = uiOpenFiles(h_window[W_MAIN], filter_c, filter_v, selectedFiles, 65536);
+
+    printf("openfiles = %d\n",r);
+
+    if (!r) {
+	printf("error when opening files...");
+	return 0;
+    }
+
+    char* x = selectedFiles;
+
+    int i = 0;
+
+    while (*x != 0) {
+
+	printf("%d. %s\n",i+1, x);
+	x += strlen(x) + 1; //jump to next file name.
+	i++;
+    }
+
+    struct pl_item newitem;
+
+    if (i == 1) {
+	loadFile(selectedFiles,&newitem);
+	newitem.loaded = true;
+	plist_clear(&playlist);
+	plist_add(&playlist,&newitem);
+	loadFromPlaylist(0);
+    } else {
+
+	char* path = selectedFiles;
+	char* file = selectedFiles + strlen(selectedFiles) + 1;
+	
+	char fullFileName[2048];
+
+	plist_clear(&playlist);
+
+	while (*file != 0) {
+
+	    snprintf(fullFileName,2048,"%s/%s",path,file);
+	    int r = loadFile(fullFileName, &newitem);
+	    if (r == 0) {
+	    plist_add(&playlist, &newitem);
+	    }
+	    file += strlen(file) + 1;
+	}
+	loadFromPlaylist(0);
+    }
+
+    updatePlaylist();
+    return i;
 }
 
 int openFileAndPlay(void) {
@@ -558,6 +523,12 @@ int handleClickEvents(HWND hWnd) {
 			       pb.balance = bal;
 			       if (ip) ip->SetPan(bal); else op->SetPan(bal);
 			       break; }
+	case WE_B_PL: {
+			  playlistVisible = !playlistVisible;
+			  cur->value = playlistVisible;
+			  windowVisibility(h_window[W_PLAYLIST], playlistVisible);
+
+		      break;}
     }
     return 0;
 }
@@ -641,6 +612,9 @@ void mainWinPaintFunc(HWND hWnd) {
     struct element* cur = &mw_elements[0];
     do {
 	i = find_element_to_update(hWnd,WE_COUNT,mw_elements,&cur);
+
+	if (hWnd == h_window[W_PLAYLIST]) 
+	    printf("element %d in window %p\n",(cur - mw_elements), hWnd);
 
 	switch (cur - mw_elements) {
 	    case WE_BACKGROUND:
@@ -875,11 +849,22 @@ void mainWinPaintFunc(HWND hWnd) {
 				  break; }
 	    case WE_P_CENTER: {
 				  short x = cur->x, y= cur->y, w=cur->w, h=cur->h;
+				  invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
 				  normalizeRect(hWnd,&x,&y,&w,&h);
 
+				  printf("playlist has %d entries\n",plist_count(&playlist));
 
+				  int iy = 0;
 
-				  uiDrawText(hWnd, "hello world", cur->x, cur->y, cur->w, cur->h, skin.bgcolor, skin.fgcolor, UITA_CENTER);
+				  for (int i=0; i < plist_count(&playlist); i++) {
+
+				      char fulltitle[512];
+				      snprintf(fulltitle,512,"%d. %s",i+1, plist_get(&playlist,i).title);
+				      int lh = 0;
+				      uiDrawText(hWnd,fulltitle,cur->x,cur->y + iy,cur->w,cur->h,skin.bgcolor,skin.fgcolor,UITA_LEFT,&lh);
+				      iy += lh;
+
+				  }
 				  break; }
 	    case WE_P_B_CLOSE: {
 				    invalidateXYWH(hWnd,cur->x,cur->y,cur->w,cur->h);
@@ -942,6 +927,8 @@ int main (int argc, char** argv) {
     initConsole();
 
     initUI();
+
+    plist_init_empty(&playlist);
 
     // force the initial draw of all elements.
     for (int i=0; i < WE_COUNT; i++ ) {

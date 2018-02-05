@@ -10,7 +10,7 @@ int msgerror(const char* prefix) {
 	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS ,NULL,errcode,0,errortxt,256,NULL);
 	char msgtxt[1024];
 	if (prefix) {
-		snprintf(msgtxt,1024,"%s: %s (%u)",prefix,errortxt,errcode);
+		snprintf(msgtxt,1024,"%s: %s (%lu)",prefix,errortxt,errcode);
 	} else {
 		snprintf(msgtxt,1024,"Error %lu: %s",errcode,errortxt);
 	}

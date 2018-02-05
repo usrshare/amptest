@@ -29,6 +29,10 @@ int plist_add(plist_t* pl, struct pl_item* i) {
 	return 0;
 }
 
+int plist_clear(plist_t* pl) {
+	return plist_init_empty(pl);
+}
+
 int plist_del_m(plist_t* pl, unsigned int index, unsigned int count) {
 
 	if (index >= pl->count) return 1;

@@ -63,10 +63,11 @@ int normalizeRect (HWND hWnd, short* x, short* y, short* w, short* h);
 
 int skinInitializePaint(HWND hWnd);
 int skinBlit(HWND hWnd, HBITMAP src, short xs, short ys, short xd, short yd, short w, short h);
+int skinRect(HWND hWnd, short x, short y, short w, short h, unsigned int color);
 int windowBlit(HWND hWnd);
 int skinDestroyPaint(HWND hWnd);
 int invalidateXYWH(HWND hWnd, short x, short y, short w, short h);
-int uiDrawText(HWND hWnd, const char* text, short x, short y, short w, short h, unsigned int bgcolor, unsigned int fgcolor, enum text_align align);
+int uiDrawText(HWND hWnd, const char* text, short x, short y, short w, short h, unsigned int bgcolor, unsigned int fgcolor, enum text_align align, int* line_height);
 
 int showSystemMenu(HWND hWnd, int submenu, short x, short y);
 
@@ -84,12 +85,15 @@ enum uiMessageBoxType {
 
 int getWindowSize(HWND hWnd, unsigned int* w, unsigned int* h);
 
+int windowVisibility(HWND hWnd, int show);
+
 int changeWindowTitle(HWND hWnd, const char* title);
 
 int uiOKMessageBox(HWND parenthWnd, const char* text, const char* title, int type);
 int uiInputBox(HWND hWnd, const char* prompt, char* rstring, size_t rstrSz);
 
 int uiOpenFile(HWND hWnd, unsigned int types_c, const char** types_v, char* out_file, unsigned int out_sz);
+int uiOpenFiles(HWND hWnd, unsigned int types_c, const char** types_v, char* out_file, unsigned int out_sz); //multiple files
 void initConsole(void);
 
 #endif

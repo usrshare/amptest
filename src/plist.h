@@ -4,8 +4,8 @@
 
 struct pl_item {
 	int loaded;
-	char filePath[1024];
-	char title[256];
+	char filePath[2048];
+	char title[2048];
 	int length;
 };
 
@@ -23,6 +23,8 @@ int plist_init_sz(plist_t* pl, unsigned int size);
 int plist_add(plist_t* pl, struct pl_item* i);
 
 int plist_count(plist_t* pl);
+
+int plist_clear(plist_t* pl);
 
 struct pl_item plist_get(plist_t* pl, unsigned int index);
 

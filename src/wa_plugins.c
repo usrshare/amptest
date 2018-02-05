@@ -37,6 +37,10 @@ struct waInputPlugin* loadInputPlugin(const char* filename) {
 	// to prevent plugins from crashing, the pointers all point to empty
 	// functions that either return nothing or zero.
 
+	// following GCC diagnostics were added to remove warnings.
+
+#pragma GCC diagnostic push "-Wincompatible-pointer-types"
+#pragma GCC diagnostic ignored "-Wincompatible-pointer-types"
 	newIn->SAGetMode = return0;
 	newIn->SAAdd = emptyfunc;
 	newIn->SAAddPCMData = emptyfunc;
@@ -54,6 +58,7 @@ struct waInputPlugin* loadInputPlugin(const char* filename) {
 	newIn->SetInfo = gf.SetInfo;
 	newIn->hMainWindow = gf.hMainWindow;
 	newIn->Init();
+#pragma GCC diagnostic pop "-Wincompatible-pointer-types"
 	
 	printf("Loaded %s (%s).\n",filename, newIn->description);
 
@@ -128,21 +133,24 @@ int checkExtensions(const char* media_fn, const char* extensions) {
 	return 0;
 }
 
-int preparePlugin(const char* media_fn) {
+struct waInputPlugin* findPlugin(const char* media_fn) {
 	for (int i=0; i < inputs_c; i++) {
-		int r = 0;
-		r = checkExtensions(media_fn, inputs_v[i]->FileExtensions);
+		int r = checkExtensions(media_fn, inputs_v[i]->FileExtensions);
 		if (!r) r = inputs_v[i]->IsOurFile(media_fn);
-		if (r) {
-			if (ip != inputs_v[i]) {
-			op->Close();
-			}
-			ip = inputs_v[i];
-			//printf("Plugin: %s\n", ip->description);
-			return 0;
-		}
-	}	
-	return 1;
+		if (r) return inputs_v[i];
+	}
+	return NULL;
+}
+
+int preparePlugin(const char* media_fn) {
+
+	struct waInputPlugin* newip = findPlugin(media_fn);
+	if (!newip) return 1; //if no plugin found
+
+	//if plugin found
+	op->Close();
+	ip = newip;
+	return 0;
 }
 
 struct waOutputPlugin* loadOutputPlugin(const char* filename) {
